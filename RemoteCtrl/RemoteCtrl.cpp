@@ -34,28 +34,27 @@ int main()
         }
         else
         {
-            // TODO: socket、bind、listen、accept、read、write、close
-            // 1. 套接字初始化
+            // 1. 初始化网络
+            CServerSocket* pserver = CServerSocket::getInstance();
+            if (pserver->InitServer() == false) {
+                MessageBox(NULL, L"网络初始化失败", L"错误", MB_OK | MB_ICONERROR);
+                exit(0);
+            }
+            int count = 0;
+            while (pserver != nullptr) {
+                // 2. 等待客户端连接
+                if (pserver->AcceptClient() == false) {
+                    if (count > 3) {
+                        MessageBox(NULL, L"自动重试超过3次，程序结束！", L"错误", MB_OK | MB_ICONERROR);
+                        exit(0);
+                    }
+                    MessageBox(NULL, L"无法接受客户端连接，自动重试", L"错误", MB_OK | MB_ICONERROR);
+                    count++;
+                }
+                // 3. 处理客户端命令
+                int ret = pserver->DealCommand();
             
-            //server; // server 是在main函数之间进行初始化的
-            // 2. 绑定本地地址
-            SOCKET serv_sock = socket(PF_INET, SOCK_STREAM, 0);
-            sockaddr_in serv_addr, cli_addr;
-            memset(&serv_addr, 0, sizeof(serv_addr));
-            serv_addr.sin_family = AF_INET;
-            serv_addr.sin_addr.s_addr = htonl(INADDR_ANY);
-            serv_addr.sin_port = htons(9527);
-            // 3. 监听
-            bind(serv_sock, (sockaddr*)&serv_addr, sizeof(serv_addr));
-            listen(serv_sock, 1);
-            // 4. 等待客户端连接
-            char recv_buf[1024] = { 0 };
-            int cli_len = sizeof(cli_addr);
-            //SOCKET cli_sock = accept(serv_sock, (sockaddr*)&cli_addr, &cli_len);
-            // 5. 接收数据
-            //recv(cli_sock, recv_buf, sizeof(recv_buf), 0);
-            //send(cli_sock, recv_buf, sizeof(recv_buf), 0);
-            closesocket(serv_sock);
+            }
         }
     }
     else
