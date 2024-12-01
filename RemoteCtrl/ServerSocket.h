@@ -2,6 +2,7 @@
 #include "framework.h"
 #include "pch.h"
 
+// 解析和处理数据包
 class CPacket {
 public:
     CPacket() :sHead(0), nLength(0), sCmd(0), sSum(0) {}
@@ -38,7 +39,7 @@ public:
             nSize = 0;
             return;
         }
-        nLength = *(DWORD*)(pData + i); // 包长度
+        nLength = *(DWORD*)(pData + i); // 当前包长度
         i += 4;
         if (nLength + i > nSize) { // 包未全部接受到，就返回，解析失败
             nSize = 0;
@@ -49,13 +50,13 @@ public:
         if (nLength > 4) {
             sData.resize(nLength - 2 - 2); // 包数据
             memcpy((void*)sData.c_str(), pData + i, nLength - 4); // 复制数据
-            i += nLength - 4 - 2 - 2;
+            i += nLength - 4;
         }
         sSum = *(WORD*)(pData + i); // 校验和
         i += 2;
-        WORD sum = 0;
+        WORD sum = 0; 
         for (size_t j = 0; j < sData.size(); j++) {
-            sum += BYTE(sData[j]) & 0xFF;
+            sum += BYTE(sData[i]) & 0xFF;
         }
         if (sum != sSum) { // 校验和错误
             nSize = i;
@@ -65,11 +66,11 @@ public:
     }
     ~CPacket() {}
 public:
-    WORD sHead; // 包头，固定为 FEFF
-    WORD nLength; // 包长度
+    WORD sHead; // 包头，固定位： 0xFEFF
+    DWORD nLength; // 包长度
     WORD sCmd; // 控制命令
     std::string sData; // 包数据
-    WORD sSum; // 校验和
+    WORD sSum; // 和校验
 };
 
 class CServerSocket
@@ -126,6 +127,8 @@ public:
             if (recv_len <= 0) {
                 return -1;
             }
+            index += recv_len;
+            recv_len = index;
             m_packet = CPacket((BYTE*)buffer, recv_len);
             if (recv_len > 0) {
                 memmove(buffer, buffer + recv_len, BUFFER_SIZE - recv_len);
