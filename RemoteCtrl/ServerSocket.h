@@ -2,10 +2,25 @@
 #include "framework.h"
 #include "pch.h"
 
+#pragma pack(push)
+#pragma pack(1)
 // 解析和处理数据包
 class CPacket {
 public:
     CPacket() :sHead(0), nLength(0), sCmd(0), sSum(0) {}
+    CPacket(WORD nCmd, const BYTE* pData, size_t nSize) {
+        sHead = 0xFEFF;
+        nLength = nSize + 2 + 2; // 命令(2) + 数据(nSize) + 校验和(2)
+        sCmd = nCmd;
+        sData.resize(nSize);
+        memcpy((void*)sData.c_str(), pData, nSize);
+        sSum = 0;
+        for (size_t i = 0; i < sData.size(); i++) {
+            BYTE  vlaue = BYTE(sData[i]) & 0xFF;
+            sSum += vlaue;
+        }
+        sSum = (WORD)(sSum & 0xFFFF);
+    }
     // 复制构造函数，用于拷贝数据包
     CPacket(const CPacket& packet) {
         sHead = packet.sHead;
@@ -56,13 +71,28 @@ public:
         i += 2;
         WORD sum = 0; 
         for (size_t j = 0; j < sData.size(); j++) {
-            sum += BYTE(sData[i]) & 0xFF;
+            sum += BYTE(sData[j]) & 0xFF;
         }
         if (sum != sSum) { // 校验和错误
             nSize = i;
             return;
         }
         nSize = 0; // 解析失败
+    }
+
+    // 包数据大小
+    int Size() {
+        return nLength + 2 + 4;
+    }
+    const char* Data() {
+        strOut.resize(nLength + 2 + 4);
+        BYTE* pData = (BYTE*)strOut.c_str();
+        *(WORD*)pData = sHead; pData += 2;
+        *(DWORD*)pData = nLength; pData += 4;
+        *(WORD*)pData = sCmd; pData += 2;
+        memcpy(pData, sData.c_str(), sData.size()); pData += sData.size();
+        *(WORD*)pData = sSum;
+        return strOut.c_str();
     }
     ~CPacket() {}
 public:
@@ -71,7 +101,10 @@ public:
     WORD sCmd; // 控制命令
     std::string sData; // 包数据
     WORD sSum; // 和校验
+    std::string strOut; // 整个包的数据
 };
+#pragma pack(pop)
+
 
 class CServerSocket
 {
@@ -145,6 +178,12 @@ public:
             return false;
         }
         return send(m_cli_sock, (char*)pData, nSize, 0) > 0;
+    }
+    bool Send(CPacket& packet) {
+        if (m_cli_sock == INVALID_SOCKET) {
+            return false;
+        }
+        return send(m_cli_sock, packet.Data(), packet.Size(), 0) > 0;
     }
 
 private:
