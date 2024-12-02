@@ -185,6 +185,14 @@ public:
         }
         return send(m_cli_sock, packet.Data(), packet.Size(), 0) > 0;
     }
+    // 获取文件路径
+    bool GetFilePath(std::string& filePath) {
+        if (m_packet.sCmd == 2) {
+            filePath = m_packet.sData;
+            return true;
+        }
+        return false;
+    }
 
 private:
     CServerSocket& operator=(const CServerSocket&) {}

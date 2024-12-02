@@ -50,6 +50,62 @@ int MakeDriverInfo() { // 1==> A盘, 2==>B盘, 3==>C盘...,26=>Z盘
     return 0;
 }
 
+#include <io.h>
+#include <list>
+typedef struct file_info {
+    file_info() {
+        IsInvalid = FALSE;
+        memset(szFileName, 0, sizeof(szFileName));
+        IsDirectory = -1;
+        HasNext = FALSE;
+    }
+    BOOL IsInvalid; // 是否是无效文件
+    char szFileName[256]; // 文件名
+    BOOL IsDirectory; // 是否是目录
+    BOOL HasNext; // 是否有下一个文件
+}FILEINFO, * PFILEINFO;
+
+// 创建指定目录下的文件信息
+int MakeDirectoryInfo() {
+    std::string strPath;
+    //std::list<FILEINFO> fileInfoLists;
+    if (CServerSocket::getInstance()->GetFilePath(strPath) == false) {
+        OutputDebugString(_T("无法获取文件路径"));
+        return -1;
+    }
+    if (_chdir(strPath.c_str()) != 0) { // 将当前进程的工作目录更改为 strPath 指定的路径
+        FILEINFO fileInfo;
+        fileInfo.IsInvalid = TRUE;
+        fileInfo.IsDirectory = TRUE;
+        fileInfo.HasNext = FALSE;
+        memcpy(fileInfo.szFileName, strPath.c_str(), strPath.size());
+        //fileInfoLists.push_back(fileInfo);
+        CPacket pack((WORD)2, (BYTE*)&fileInfo, (size_t)sizeof(fileInfo));
+        CServerSocket::getInstance()->Send(pack);
+        OutputDebugString(_T("没有权限访问目录"));
+        return -2;
+    }
+    _finddata_t fdata;
+    int hfind = 0;
+    if ((hfind = _findfirst("*", &fdata)) == -1) {
+        OutputDebugString(_T("无法找到文件"));
+        return -3;
+    }
+    do
+    {
+        FILEINFO fileInfo;
+        fileInfo.IsDirectory = (fdata.attrib & _A_SUBDIR) != 0;
+        memcpy(fileInfo.szFileName, fdata.name, strlen(fdata.name));
+        //fileInfoLists.push_back(fileInfo);
+        CPacket pack((WORD)2, (BYTE*)&fileInfo, (size_t)sizeof(fileInfo));
+        CServerSocket::getInstance()->Send(pack);
+    } while (!_findnext(hfind, &fdata));
+    // 发送信息到客户端
+    FILEINFO fileInfo;
+    fileInfo.HasNext = FALSE;
+    return 0;
+}
+
 int main()
 {
     int nRetCode = 0;
@@ -92,9 +148,11 @@ int main()
             int nCmd = 1;
             switch (nCmd)
             {
-            case 1:
-                // 查看磁盘信息
+            case 1:// 查看磁盘信息
                 MakeDriverInfo();
+                break;
+            case 2: // 查看指定目录下的文件
+                MakeDirectoryInfo();
                 break;
             default:
                 break;
