@@ -106,6 +106,48 @@ int MakeDirectoryInfo() {
     return 0;
 }
 
+// 打开文件
+int RunFile() {
+    std::string strPath;
+    CServerSocket::getInstance()->GetFilePath(strPath);
+    ShellExecuteA(NULL, NULL, strPath.c_str(), NULL, NULL, SW_SHOWNORMAL);
+    CPacket pack((WORD)3, NULL, 0);
+    CServerSocket::getInstance()->Send(pack);
+    return 0;
+}
+
+// 下载文件
+int downloadFile() {
+    std::string strPath;
+    CServerSocket::getInstance()->GetFilePath(strPath);
+    long long data = 0;
+    FILE* pFile = NULL;
+    errno_t err = fopen_s(&pFile, strPath.c_str(), "rb");
+    if (err != 0) {
+        CPacket pack((WORD)4, (BYTE*)&data, 8);
+        CServerSocket::getInstance()->Send(pack);
+        return -1;
+    }
+    if (pFile != NULL) {
+        fseek(pFile, 0, SEEK_END);
+        data = _ftelli64(pFile); // 整个文件的大小
+        CPacket head(4, (BYTE*)&data, 8);
+        fseek(pFile, 0, SEEK_SET);
+
+        char buffer[1024] = { 0 };
+        size_t rLen = 0;
+        do {
+            rLen = fread(buffer, 1, sizeof(buffer), pFile);
+            CPacket pack((WORD)4, (BYTE*)buffer, rLen);
+            CServerSocket::getInstance()->Send(pack);
+        } while (rLen >= sizeof(buffer));
+        fclose(pFile);
+    }
+    CPacket pack((WORD)4, NULL, 0);
+    CServerSocket::getInstance()->Send(pack);
+    return 0;
+}
+
 int main()
 {
     int nRetCode = 0;
@@ -153,6 +195,12 @@ int main()
                 break;
             case 2: // 查看指定目录下的文件
                 MakeDirectoryInfo();
+                break;
+            case 3: // 打开文件
+                RunFile();
+                break;
+            case 4: // 下载文件
+                downloadFile();
                 break;
             default:
                 break;

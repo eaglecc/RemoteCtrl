@@ -12,8 +12,13 @@ public:
         sHead = 0xFEFF;
         nLength = nSize + 2 + 2; // 命令(2) + 数据(nSize) + 校验和(2)
         sCmd = nCmd;
-        sData.resize(nSize);
-        memcpy((void*)sData.c_str(), pData, nSize);
+        if (nSize > 0) {
+            sData.resize(nSize);
+            memcpy((void*)sData.c_str(), pData, nSize);
+        }
+        else {
+            sData.clear();
+        }
         sSum = 0;
         for (size_t i = 0; i < sData.size(); i++) {
             BYTE  vlaue = BYTE(sData[i]) & 0xFF;
@@ -187,7 +192,7 @@ public:
     }
     // 获取文件路径
     bool GetFilePath(std::string& filePath) {
-        if (m_packet.sCmd == 2) {
+        if (m_packet.sCmd == 2 || m_packet.sCmd == 3 || m_packet.sCmd == 4) {
             filePath = m_packet.sData;
             return true;
         }
