@@ -110,6 +110,17 @@ public:
 };
 #pragma pack(pop)
 
+typedef struct MouseEvent {
+    MouseEvent() {
+        nAction = 0;
+        nButton = -1;
+        ptXY.x = 0;
+        ptXY.y = 0;
+    };
+    WORD nAction; // 点击、移动、双击
+    WORD nButton; // 左键、右键、中键
+    POINT ptXY; // 坐标
+}MOUSEEV,*PMOUSEEV;
 
 class CServerSocket
 {
@@ -197,6 +208,13 @@ public:
             return true;
         }
         return false;
+    }
+    // 获取鼠标事件
+    bool GetMouseEvent(MOUSEEV& mouseEvent){
+        if (m_packet.sCmd == 5) {
+            memcpy(&mouseEvent, m_packet.sData.c_str(), sizeof(MOUSEEV));
+            return true;
+        }
     }
 
 private:

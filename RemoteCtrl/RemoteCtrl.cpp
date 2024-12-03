@@ -148,6 +148,104 @@ int downloadFile() {
     return 0;
 }
 
+// 鼠标控制
+int MouseEvent() {
+    MOUSEEV mouse;
+    if (CServerSocket::getInstance()->GetMouseEvent(mouse)) {
+        DWORD nFlags = 0;
+        switch (mouse.nButton)
+        {
+        case 0:// 左键
+            nFlags = 1;
+            break;
+        case 1:// 右键
+            nFlags = 2;
+            break;
+        case 2:// 中键
+            nFlags = 4;
+            break;
+        case 3:// 没有按键
+            nFlags = 8;
+            break;
+        default:
+            break;
+        }
+
+        if (nFlags != 8) SetCursorPos(mouse.ptXY.x, mouse.ptXY.y);
+
+        switch (mouse.nAction) {
+        case 0: // 单击
+            nFlags |= 0x10;
+            break;
+        case 1: // 双击
+            nFlags |= 0x20;
+            break;
+        case 2: // 按下
+            nFlags |= 0x40;
+            break;
+        case 3: // 弹起
+            nFlags |= 0x80;
+            break;
+        default:
+            break;
+        }
+        switch (nFlags)
+        {
+        case 0x21: // 左键双击(利用switch 穿透效果)
+            mouse_event(MOUSEEVENTF_LEFTDOWN, 0, 0, 0, GetMessageExtraInfo());
+            mouse_event(MOUSEEVENTF_LEFTUP, 0, 0, 0, GetMessageExtraInfo());
+        case 0x11: // 左键单击
+            mouse_event(MOUSEEVENTF_LEFTDOWN, 0, 0, 0, GetMessageExtraInfo());
+            mouse_event(MOUSEEVENTF_LEFTUP, 0, 0, 0, GetMessageExtraInfo());
+            break;
+        case 0x41: // 左键按下
+            mouse_event(MOUSEEVENTF_LEFTDOWN, 0, 0, 0, GetMessageExtraInfo());
+            break;
+        case 0x81: // 左键弹起
+            mouse_event(MOUSEEVENTF_LEFTUP, 0, 0, 0, GetMessageExtraInfo());
+            break;
+        case 0x22: // 右键双击
+            mouse_event(MOUSEEVENTF_RIGHTDOWN, 0, 0, 0, GetMessageExtraInfo());
+            mouse_event(MOUSEEVENTF_RIGHTUP, 0, 0, 0, GetMessageExtraInfo());
+        case 0x12: // 右键单击
+            mouse_event(MOUSEEVENTF_RIGHTDOWN, 0, 0, 0, GetMessageExtraInfo());
+            mouse_event(MOUSEEVENTF_RIGHTUP, 0, 0, 0, GetMessageExtraInfo());
+            break;
+        case 0x42: // 右键按下
+            mouse_event(MOUSEEVENTF_RIGHTDOWN, 0, 0, 0, GetMessageExtraInfo());
+            break;
+        case 0x82: // 右键弹起
+            mouse_event(MOUSEEVENTF_RIGHTUP, 0, 0, 0, GetMessageExtraInfo());
+            break;
+        case 0x24: // 中键双击
+            mouse_event(MOUSEEVENTF_MIDDLEDOWN, 0, 0, 0, GetMessageExtraInfo());
+            mouse_event(MOUSEEVENTF_MIDDLEUP, 0, 0, 0, GetMessageExtraInfo());
+        case 0x14: // 中键单击
+            mouse_event(MOUSEEVENTF_MIDDLEDOWN, 0, 0, 0, GetMessageExtraInfo());
+            mouse_event(MOUSEEVENTF_MIDDLEUP, 0, 0, 0, GetMessageExtraInfo());
+            break;
+
+        case 0x44: // 中键按下
+            mouse_event(MOUSEEVENTF_MIDDLEDOWN, 0, 0, 0, GetMessageExtraInfo());
+            break;
+        case 0x84: // 中键弹起
+            mouse_event(MOUSEEVENTF_MIDDLEUP, 0, 0, 0, GetMessageExtraInfo());
+            break;
+        case 0x08: // 单纯的鼠标移动
+            mouse_event(MOUSEEVENTF_MOVE, 0, 0, 0, GetMessageExtraInfo());
+            break;
+        default:
+            break;
+        }
+        CPacket pack(4, NULL, 0);
+        CServerSocket::getInstance()->Send(pack);
+    }
+    else {
+        OutputDebugString(_T("获取鼠标事件失败"));
+        return -1;
+    }
+}
+
 int main()
 {
     int nRetCode = 0;
@@ -201,6 +299,9 @@ int main()
                 break;
             case 4: // 下载文件
                 downloadFile();
+                break;
+            case 5: // 鼠标控制
+                MouseEvent();
                 break;
             default:
                 break;
