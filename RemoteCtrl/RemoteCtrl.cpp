@@ -6,6 +6,8 @@
 #include "RemoteCtrl.h"
 #include "ServerSocket.h"
 #include <direct.h>
+#include <atlimage.h>
+
 
 #ifdef _DEBUG
 #define new DEBUG_NEW
@@ -246,6 +248,37 @@ int MouseEvent() {
     }
 }
 
+// 发送屏幕内容
+int SendScreen() {
+    CImage screen; // 定义图像对象
+    HDC hdc = GetDC(NULL); // 获取屏幕设备上下文
+    int nBitPerPixel = GetDeviceCaps(hdc, BITSPIXEL); // 获取屏幕色彩位数
+    int nWidth = GetDeviceCaps(hdc, HORZRES); // 获取屏幕宽度
+    int nHeight = GetDeviceCaps(hdc, VERTRES); // 获取屏幕高度
+    screen.Create(nWidth, nHeight, nBitPerPixel); // 创建图像
+    BitBlt(screen.GetDC(), 0, 0, nWidth, nHeight, hdc, 0, 0, SRCCOPY); // 复制屏幕内容到图像
+    ReleaseDC(NULL, hdc); // 释放设备上下文
+
+    HGLOBAL hMem = GlobalAlloc(GMEM_MOVEABLE, 0); // 申请内存
+    if (hMem == NULL) return -1;
+    IStream* pStream = NULL; // 定义内存流
+    HRESULT ret = CreateStreamOnHGlobal(hMem, TRUE, &pStream); // 创建内存流
+    if (ret == S_OK) {
+        screen.Save(pStream, Gdiplus::ImageFormatJPEG); // 保存图像到内存流
+        LARGE_INTEGER li = { 0 };
+        pStream->Seek(li, STREAM_SEEK_SET, NULL); // 定位到流的开始位置
+        PBYTE pData = (PBYTE)GlobalLock(hMem); // 锁定内存
+        SIZE_T nSize = GlobalSize(hMem); // 获取内存大小
+        CPacket pack(6, (BYTE*)pData, nSize); // 打包图像数据
+        CServerSocket::getInstance()->Send(pack); // 发送图像数据
+        GlobalUnlock(hMem); // 解锁内存
+    }
+    pStream->Release(); // 释放内存流
+    GlobalFree(hMem); // 释放内存
+    screen.ReleaseDC(); // 释放设备上下文
+    return 0;
+}
+
 int main()
 {
     int nRetCode = 0;
@@ -285,7 +318,7 @@ int main()
             //
             //}
 
-            int nCmd = 1;
+            int nCmd = 6;
             switch (nCmd)
             {
             case 1:// 查看磁盘信息
@@ -303,11 +336,12 @@ int main()
             case 5: // 鼠标控制
                 MouseEvent();
                 break;
+            case 6: // 发送屏幕内容==>截屏
+                SendScreen();
+                break;
             default:
                 break;
             }
-
-
         }
     }
     else
