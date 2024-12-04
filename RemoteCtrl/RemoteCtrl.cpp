@@ -8,7 +8,6 @@
 #include <direct.h>
 #include <atlimage.h>
 
-
 #ifdef _DEBUG
 #define new DEBUG_NEW
 #endif
@@ -279,6 +278,32 @@ int SendScreen() {
     return 0;
 }
 
+#include "LockDialog.h"
+CLockDialog dlg;
+// 锁机
+int LockMachine() {
+    dlg.ShowWindow(SW_SHOW);
+    dlg.SetWindowPos(&dlg.wndTopMost, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
+    MSG msg; 
+    while (GetMessage(&msg, NULL, 0, 0)) { // 消息循环
+        TranslateMessage(&msg); 
+        DispatchMessage(&msg); 
+        if (msg.message == WM_KEYDOWN) {
+            if (msg.wParam == VK_ESCAPE) {
+                dlg.DestroyWindow();
+                break;
+            }
+        }
+    }
+    return 0;
+}
+
+// 解锁
+int UnmLockMachine() {
+    // TODO: 实现解锁功能
+    return 0;
+}
+
 int main()
 {
     int nRetCode = 0;
@@ -318,7 +343,8 @@ int main()
             //
             //}
 
-            int nCmd = 6;
+            dlg.Create(IDD_DIALOG_INFO, NULL);
+            int nCmd = 7;
             switch (nCmd)
             {
             case 1:// 查看磁盘信息
@@ -338,6 +364,12 @@ int main()
                 break;
             case 6: // 发送屏幕内容==>截屏
                 SendScreen();
+                break;
+            case 7: // 锁机
+                LockMachine();
+                break;
+            case 8: // 解锁
+                UnmLockMachine();
                 break;
             default:
                 break;
