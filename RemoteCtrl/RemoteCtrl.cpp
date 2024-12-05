@@ -280,27 +280,53 @@ int SendScreen() {
 
 #include "LockDialog.h"
 CLockDialog dlg;
-// 锁机
-int LockMachine() {
+unsigned int threadId = 0;
+
+unsigned __stdcall threadLockDlg(void* arg) {
+    dlg.Create(IDD_DIALOG_INFO, NULL);
     dlg.ShowWindow(SW_SHOW);
     dlg.SetWindowPos(&dlg.wndTopMost, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
-    MSG msg; 
+    ShowCursor(FALSE); // 隐藏鼠标
+    //::ShowWindow(::FindWindow(L"Shell_TrayWnd", NULL), SW_HIDE); // 隐藏任务栏
+    CRect rect;
+    dlg.GetWindowRect(&rect); // 获取窗口位置
+    ClipCursor(rect); // 限制鼠标位置
+
+    MSG msg;
     while (GetMessage(&msg, NULL, 0, 0)) { // 消息循环
-        TranslateMessage(&msg); 
-        DispatchMessage(&msg); 
+        TranslateMessage(&msg);
+        DispatchMessage(&msg);
+        // 处理键盘事件
         if (msg.message == WM_KEYDOWN) {
             if (msg.wParam == VK_ESCAPE) {
-                dlg.DestroyWindow();
                 break;
             }
         }
     }
+    ShowCursor(TRUE); // 显示鼠标
+    //::ShowWindow(::FindWindow(L"Shell_TrayWnd", NULL), SW_SHOW); // 恢复任务栏
+    dlg.DestroyWindow();
+    _endthreadex(0); // 结束线程
+    return 0;
+}
+
+// 锁机
+int LockMachine() {
+    if (dlg.m_hWnd != NULL || dlg.m_hWnd != INVALID_HANDLE_VALUE) {
+        //_beginthread(threadLockDlg, 0, NULL);
+        _beginthreadex(NULL, 0, threadLockDlg, NULL, 0, &threadId);
+    }
+    CPacket pack(7, NULL, 0);
+    CServerSocket::getInstance()->Send(pack);
     return 0;
 }
 
 // 解锁
 int UnmLockMachine() {
-    // TODO: 实现解锁功能
+    //::SendMessage(dlg.m_hWnd, WM_KEYDOWN, VK_ESCAPE, 0); // 发送ESC键退出锁屏
+    PostThreadMessage(threadId, WM_KEYDOWN, VK_ESCAPE, 0); // 发送ESC键退出锁屏
+    CPacket pack(7, NULL, 0);
+    CServerSocket::getInstance()->Send(pack);
     return 0;
 }
 
@@ -343,7 +369,6 @@ int main()
             //
             //}
 
-            dlg.Create(IDD_DIALOG_INFO, NULL);
             int nCmd = 7;
             switch (nCmd)
             {
