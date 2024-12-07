@@ -330,6 +330,51 @@ int UnmLockMachine() {
     return 0;
 }
 
+// 连接测试
+int TestConnect() {
+    CPacket pack(2000, NULL, 0);
+    CServerSocket::getInstance()->Send(pack);
+    return 0;
+}
+
+// 接受命令并处理
+int ExcuteCommand(int nCmd) {
+    int ret = 0;
+    switch (nCmd)
+    {
+    case 1:// 查看磁盘信息
+        ret = MakeDriverInfo();
+        break;
+    case 2: // 查看指定目录下的文件
+        ret = MakeDirectoryInfo();
+        break;
+    case 3: // 打开文件
+        ret = RunFile();
+        break;
+    case 4: // 下载文件
+        ret = downloadFile();
+        break;
+    case 5: // 鼠标控制
+        ret = MouseEvent();
+        break;
+    case 6: // 发送屏幕内容==>截屏
+        ret = SendScreen();
+        break;
+    case 7: // 锁机
+        ret = LockMachine();
+        break;
+    case 8: // 解锁
+        ret = UnmLockMachine();
+        break;
+    case 2000: // 连接测试
+        ret = TestConnect();
+        break;
+    default:
+        break;
+    }
+    return ret;
+}
+
 int main()
 {
     int nRetCode = 0;
@@ -347,58 +392,40 @@ int main()
         }
         else
         {
-            //// 1. 初始化网络
-            //CServerSocket* pserver = CServerSocket::getInstance();
-            //if (pserver->InitServer() == false) {
-            //    MessageBox(NULL, L"网络初始化失败", L"错误", MB_OK | MB_ICONERROR);
-            //    exit(0);
-            //}
-            //int count = 0;
-            //while (pserver != nullptr) {
-            //    // 2. 等待客户端连接
-            //    if (pserver->AcceptClient() == false) {
-            //        if (count > 3) {
-            //            MessageBox(NULL, L"自动重试超过3次，程序结束！", L"错误", MB_OK | MB_ICONERROR);
-            //            exit(0);
-            //        }
-            //        MessageBox(NULL, L"无法接受客户端连接，自动重试", L"错误", MB_OK | MB_ICONERROR);
-            //        count++;
-            //    }
-            //    // 3. 处理客户端命令
-            //    int ret = pserver->DealCommand();
-            //
-            //}
-
-            int nCmd = 7;
-            switch (nCmd)
-            {
-            case 1:// 查看磁盘信息
-                MakeDriverInfo();
-                break;
-            case 2: // 查看指定目录下的文件
-                MakeDirectoryInfo();
-                break;
-            case 3: // 打开文件
-                RunFile();
-                break;
-            case 4: // 下载文件
-                downloadFile();
-                break;
-            case 5: // 鼠标控制
-                MouseEvent();
-                break;
-            case 6: // 发送屏幕内容==>截屏
-                SendScreen();
-                break;
-            case 7: // 锁机
-                LockMachine();
-                break;
-            case 8: // 解锁
-                UnmLockMachine();
-                break;
-            default:
-                break;
+            // 1. 初始化网络
+            CServerSocket* pserver = CServerSocket::getInstance();
+            if (pserver->InitServer() == false) {
+                MessageBox(NULL, L"网络初始化失败", L"错误", MB_OK | MB_ICONERROR);
+                exit(0);
             }
+            int count = 0;
+            while (pserver != nullptr) {
+                // 2. 等待客户端连接
+                if (pserver->AcceptClient() == false) {
+                    TRACE("接受客户端连接失败，错误码：%d\n", WSAGetLastError());
+                    if (count > 3) {
+                        MessageBox(NULL, L"自动重试超过3次，程序结束！", L"错误", MB_OK | MB_ICONERROR);
+                        exit(0);
+                    }
+                    MessageBox(NULL, L"无法接受客户端连接，自动重试", L"错误", MB_OK | MB_ICONERROR);
+                    count++;
+                    Sleep(1000); 
+                    continue;
+                }
+                TRACE("客户端连接成功\r\n");
+                // 3. 处理客户端命令
+                int ret = pserver->DealCommand();
+                TRACE("服务器处理命令：%d\r\n", ret);
+                if (ret > 0)
+                {
+                    ret = ExcuteCommand(ret);
+                    if (ret != 0) {
+                        TRACE("命令执行失败：%d\r\n", ret);
+                    }
+                    pserver->CloseClient();
+                }
+            }
+            // TODO: 4. 释放网络资源
         }
     }
     else

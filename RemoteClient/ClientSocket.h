@@ -1,6 +1,5 @@
 #pragma once
-#include "framework.h"
-#include "pch.h"
+#include <string>
 
 #pragma pack(push)
 #pragma pack(1)
@@ -8,7 +7,6 @@
 class CPacket {
 public:
     CPacket() :sHead(0), nLength(0), sCmd(0), sSum(0) {}
-
     //打包：封装成包
     CPacket(WORD nCmd, const BYTE* pData, size_t nSize)
     {
@@ -33,9 +31,8 @@ public:
         {
             sSum += BYTE(sData[j]) & 0xFF;//只取字符低八位
         }
-        TRACE("[服务器] sHead=%d nLength=%d data=[%s]  sSum=%d\r\n", sHead, nLength, sData.c_str(), sSum);
+        TRACE("[客户端] sHead=%d nLength=%d data=[%s]  sSum=%d\r\n", sHead, nLength, sData.c_str(), sSum);
     }
-
 
     // 复制构造函数，用于拷贝数据包
     CPacket(const CPacket& packet) {
@@ -117,18 +114,21 @@ public:
     int Size() {
         return nLength + 2 + 4;
     }
-    const char* Data() {
-        strOut.resize(nLength + 2 + 4);
+
+    //将包转为字符串类型
+    const char* CPacket::Data()
+    {
+        strOut.resize(nLength + 6);
         BYTE* pData = (BYTE*)strOut.c_str();
-        *(WORD*)pData = sHead; pData += 2;
-        *(DWORD*)pData = nLength; pData += 4;
-        *(WORD*)pData = sCmd; pData += 2;
-        memcpy(pData, sData.c_str(), sData.size()); pData += sData.size();
-        *(WORD*)pData = sSum;
+        *(WORD*)pData = sHead;
+        *(DWORD*)(pData + 2) = nLength;
+        *(WORD*)(pData + 2 + 4) = sCmd;
+        memcpy(pData + 2 + 4 + 2, sData.c_str(), sData.size());
+        *(WORD*)(pData + 2 + 4 + 2 + sData.size()) = sSum;
         return strOut.c_str();
     }
-    ~CPacket() {}
 
+    ~CPacket() {}
 public:
     WORD sHead; // 包头，固定位： 0xFEFF
     DWORD nLength; // 包长度
@@ -151,71 +151,55 @@ typedef struct MouseEvent {
     POINT ptXY; // 坐标
 }MOUSEEV, * PMOUSEEV;
 
-class CServerSocket
+std::string GetErrInfo(int wsaErrorCode);
+
+class CClientSocket
 {
 public:
-    static CServerSocket* getInstance() {
+    static CClientSocket* getInstance() {
         if (m_instance == NULL) { // 静态函数没有this指针，无法直接访问成员变量
-            m_instance = new CServerSocket();
+            m_instance = new CClientSocket();
         }
         return m_instance;
     }
 
     // 初始化服务器
-    bool InitServer() {
+    bool InitServer(const std::string& ip, int port) {
         if (m_sock == INVALID_SOCKET) {
             return false;
         }
         sockaddr_in serv_addr;
         memset(&serv_addr, 0, sizeof(serv_addr));
         serv_addr.sin_family = AF_INET;
-        serv_addr.sin_addr.s_addr = htonl(INADDR_ANY);
-        serv_addr.sin_port = htons(9527);
-        if (bind(m_sock, (sockaddr*)&serv_addr, sizeof(serv_addr)) == SOCKET_ERROR) {
+        serv_addr.sin_addr.s_addr = inet_addr(ip.c_str());
+        serv_addr.sin_port = htons(port);
+        if (serv_addr.sin_addr.s_addr == INADDR_NONE) {
+            AfxMessageBox(_T("IP地址错误"));
             return false;
         }
-        if (listen(m_sock, 1) == SOCKET_ERROR) {
+        int ret = connect(m_sock, (sockaddr*)&serv_addr, sizeof(serv_addr));
+        if (ret == SOCKET_ERROR) {
+            AfxMessageBox(_T("连接服务器失败"));
+            TRACE(_T("连接服务器失败，错误代码：%d，错误信息：%s\n"), WSAGetLastError(), GetErrInfo(WSAGetLastError()).c_str());
             return false;
         }
         return true;
     }
 
-    // 等待控制端连接
-    bool AcceptClient() {
-        if (m_sock == INVALID_SOCKET) {
-            TRACE("服务器套接字无效。\n");
-            return false;
-        }
-
-        sockaddr_in cli_addr;
-        memset(&cli_addr, 0, sizeof(cli_addr));
-        int cli_len = sizeof(cli_addr);
-        m_cli_sock = accept(m_sock, (sockaddr*)&cli_addr, &cli_len);
-
-        if (m_cli_sock == INVALID_SOCKET) {
-            TRACE("接受连接失败，错误码：%d\n", WSAGetLastError());
-            return false;
-        }
-
-        TRACE("收到了来自%s的连接请求\n   端口号：%d\n", inet_ntoa(cli_addr.sin_addr), ntohs(cli_addr.sin_port));
-        return true;
-    }
 #define BUFFER_SIZE 4096
-    // 处理客户端命令
+    // 处理控制端命令
     int DealCommand() {
-        if (m_cli_sock == INVALID_SOCKET) {
+        if (m_sock == INVALID_SOCKET) {
             return -1;
         }
-        TRACE("开始处理客户端 %d的命令\n", m_cli_sock);
         char* buffer = new char[BUFFER_SIZE];
         memset(buffer, 0, BUFFER_SIZE);
         size_t index = 0;
         while (true) {
-            size_t recv_len = recv(m_cli_sock, buffer + index, BUFFER_SIZE - index, 0);
+            size_t recv_len = recv(m_sock, buffer + index, BUFFER_SIZE - index, 0);
             if (recv_len <= 0) {
                 return -1;
             }
-            TRACE("收到数据包长度：%d , 内容：%s \n", recv_len, buffer);
             index += recv_len;
             recv_len = index;
             m_packet = CPacket((BYTE*)buffer, recv_len);
@@ -230,16 +214,17 @@ public:
 
     // 发送数据
     bool Send(const char* pData, int nSize) {
-        if (m_cli_sock == INVALID_SOCKET) {
+        if (m_sock == INVALID_SOCKET) {
             return false;
         }
-        return send(m_cli_sock, (char*)pData, nSize, 0) > 0;
+        return send(m_sock, (char*)pData, nSize, 0) > 0;
     }
     bool Send(CPacket& packet) {
-        if (m_cli_sock == INVALID_SOCKET) {
+        if (m_sock == INVALID_SOCKET) {
             return false;
         }
-        return send(m_cli_sock, packet.Data(), packet.Size(), 0) > 0;
+        TRACE(_T("Client Send 客户端发送数据包：%d\n"), packet.sCmd);
+        return send(m_sock, packet.Data(), packet.Size(), 0) > 0;
     }
     // 获取文件路径
     bool GetFilePath(std::string& filePath) {
@@ -256,35 +241,26 @@ public:
             return true;
         }
     }
-
     CPacket& GetPacket() {
         return m_packet;
     }
 
-    // 关闭客户端连接
-    void CloseClient() {
-        closesocket(m_cli_sock);
-        m_cli_sock = INVALID_SOCKET;
-    }
 private:
-    CServerSocket& operator=(const CServerSocket&) {}
-    CServerSocket(const CServerSocket& ss) {
+    CClientSocket& operator=(const CClientSocket&) {}
+    CClientSocket(const CClientSocket& ss) {
         m_sock = ss.m_sock;
-        m_cli_sock = ss.m_cli_sock;
     }
 
-    CServerSocket() {
+    CClientSocket() {
         m_sock = INVALID_SOCKET;
-        m_cli_sock = INVALID_SOCKET;
         if (InitSocketEnv() == FALSE) {
             MessageBox(NULL, _T("无法初始化Socket环境，请检查网络设置"), _T("Error"), MB_OK | MB_ICONERROR);
             exit(0);
         }
         m_sock = socket(PF_INET, SOCK_STREAM, 0);
-        TRACE("服务器套接字：%d\n", m_sock);
     }
 
-    ~CServerSocket() {
+    ~CClientSocket() {
         closesocket(m_sock);
         WSACleanup();
     }
@@ -308,18 +284,17 @@ private:
     class CHelper {
     public:
         CHelper() {
-            CServerSocket::getInstance();
+            CClientSocket::getInstance();
         }
         ~CHelper() {
-            CServerSocket::releaseInstance();
+            CClientSocket::releaseInstance();
         }
     };
 
     static CHelper m_helper;
-    static CServerSocket* m_instance;
+    static CClientSocket* m_instance;
     SOCKET m_sock;
-    SOCKET m_cli_sock;
     CPacket m_packet;
 };
 
-extern CServerSocket server;
+extern CClientSocket server;
