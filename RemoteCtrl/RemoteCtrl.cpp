@@ -330,6 +330,13 @@ int UnmLockMachine() {
     return 0;
 }
 
+// 连接测试
+int TestConnect() {
+    CPacket pack(2000, NULL, 0);
+    CServerSocket::getInstance()->Send(pack);
+    return 0;
+}
+
 // 接受命令并处理
 int ExcuteCommand(int nCmd) {
     int ret = 0;
@@ -358,6 +365,9 @@ int ExcuteCommand(int nCmd) {
         break;
     case 8: // 解锁
         ret = UnmLockMachine();
+        break;
+    case 2000: // 连接测试
+        ret = TestConnect();
         break;
     default:
         break;
@@ -392,20 +402,25 @@ int main()
             while (pserver != nullptr) {
                 // 2. 等待客户端连接
                 if (pserver->AcceptClient() == false) {
+                    TRACE("接受客户端连接失败，错误码：%d\n", WSAGetLastError());
                     if (count > 3) {
                         MessageBox(NULL, L"自动重试超过3次，程序结束！", L"错误", MB_OK | MB_ICONERROR);
                         exit(0);
                     }
                     MessageBox(NULL, L"无法接受客户端连接，自动重试", L"错误", MB_OK | MB_ICONERROR);
                     count++;
+                    Sleep(1000); 
+                    continue;
                 }
+                TRACE("客户端连接成功\r\n");
                 // 3. 处理客户端命令
                 int ret = pserver->DealCommand();
-                if (ret == 0)
+                TRACE("服务器处理命令：%d\r\n", ret);
+                if (ret > 0)
                 {
-                    ret = ExcuteCommand(pserver->GetPacket().sCmd);
+                    ret = ExcuteCommand(ret);
                     if (ret != 0) {
-                        TRACE("命令执行失败：%d", ret);
+                        TRACE("命令执行失败：%d\r\n", ret);
                     }
                     pserver->CloseClient();
                 }

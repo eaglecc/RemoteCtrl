@@ -7,24 +7,33 @@
 class CPacket {
 public:
     CPacket() :sHead(0), nLength(0), sCmd(0), sSum(0) {}
-    CPacket(WORD nCmd, const BYTE* pData, size_t nSize) {
+    //打包：封装成包
+    CPacket(WORD nCmd, const BYTE* pData, size_t nSize)
+    {
         sHead = 0xFEFF;
-        nLength = nSize + 2 + 2; // 命令(2) + 数据(nSize) + 校验和(2)
+        nLength = nSize + 4; // 命令(2) + 数据(nSize) + 校验和(2)
         sCmd = nCmd;
-        if (nSize > 0) {
+
+        if (nSize > 0)//有数据段
+        {
+            //打包数据段
             sData.resize(nSize);
             memcpy((void*)sData.c_str(), pData, nSize);
         }
-        else {
+        else//无数据段
+        {
             sData.clear();
         }
+
+        //打包检验位
         sSum = 0;
-        for (size_t i = 0; i < sData.size(); i++) {
-            BYTE  vlaue = BYTE(sData[i]) & 0xFF;
-            sSum += vlaue;
+        for (size_t j = 0; j < sData.size(); j++)
+        {
+            sSum += BYTE(sData[j]) & 0xFF;//只取字符低八位
         }
-        sSum = (WORD)(sSum & 0xFFFF);
+        TRACE("[客户端] sHead=%d nLength=%d data=[%s]  sSum=%d\r\n", sHead, nLength, sData.c_str(), sSum);
     }
+
     // 复制构造函数，用于拷贝数据包
     CPacket(const CPacket& packet) {
         sHead = packet.sHead;
@@ -44,60 +53,81 @@ public:
         }
         return *this;
     }
-    // 构造函数重载，从数据包中解析出各个字段
-    CPacket(const BYTE* pData, size_t nSize) {
+    // 构造函数重载，从数据包中解析出各个字段 解析包  拆包
+    CPacket(const BYTE* pData, size_t& nSize)
+    {
+        //包 [包头2 包长度4 控制命令2 包数据 和校验2]
         size_t i = 0;
-        for (; i < nSize; i++) {
-            if (*(WORD*)(pData + i) == 0xFEFF) {
-                sHead = *(WORD*)(pData + i); // 包头
+        //取包头位
+        for (; i < nSize; i++)
+        {
+            if ((*(WORD*)(pData + i)) == 0xFEFF)//找到包头
+            {
+                sHead = *(WORD*)(pData + i);
                 i += 2;
                 break;
             }
         }
-        if (i + 4 + 2 + 2 > nSize) { // 包数据可能不全，或者包头未能全部接收到
+
+        if ((i + 4 + 2 + 2) > nSize)//包数据不全 只有 [包头 包长度 控制命令 和校验]  没有数据段 解析失败
+        {
             nSize = 0;
             return;
         }
-        nLength = *(DWORD*)(pData + i); // 当前包长度
-        i += 4;
-        if (nLength + i > nSize) { // 包未全部接受到，就返回，解析失败
+
+        //取包长度位
+        nLength = *(DWORD*)(pData + i); i += 4;
+        if (nLength + i > nSize)//包未完全接收到 nLength+sizeof(包头)+sizeof(包长度) pData缓冲区越界了
+        {
             nSize = 0;
             return;
         }
-        sCmd = *(WORD*)(pData + i); // 控制命令
-        i += 2;
-        if (nLength > 4) {
-            sData.resize(nLength - 2 - 2); // 包数据
-            memcpy((void*)sData.c_str(), pData + i, nLength - 4); // 复制数据
-            i += nLength - 4;
+
+        //取出控制命令位
+        sCmd = *(WORD*)(pData + i); i += 2;
+
+        //保存数据段
+        if (nLength > 4)
+        {
+            sData.resize(nLength - 2 - 2);//nLength - [控制命令位长度] - [校验位长度]
+            memcpy((void*)sData.c_str(), pData + i, nLength - 4);
+            i = i + nLength - 2 - 2;
         }
-        sSum = *(WORD*)(pData + i); // 校验和
-        i += 2;
+
+        //取出校验位 并校验 校验位：由数据段的每个字符的低八位的和组成校验位
+        sSum = *(WORD*)(pData + i); i += 2;
         WORD sum = 0;
-        for (size_t j = 0; j < sData.size(); j++) {
-            sum += BYTE(sData[j]) & 0xFF;
+        for (size_t j = 0; j < sData.size(); j++)
+        {
+            sum += BYTE(sData[j]) & 0xFF;//只取字符低八位
         }
-        if (sum != sSum) { // 校验和错误
+        //TRACE("[客户端] sHead=%d nLength=%d data=[%s]  sSum=%d  sum = %d\r\n", sHead, nLength, strData.c_str(), sSum, sum);
+        if (sum == sSum)
+        {
             nSize = i;
             return;
         }
-        nSize = 0; // 解析失败
+        nSize = 0;
     }
 
     // 包数据大小
     int Size() {
         return nLength + 2 + 4;
     }
-    const char* Data() {
-        strOut.resize(nLength + 2 + 4);
+
+    //将包转为字符串类型
+    const char* CPacket::Data()
+    {
+        strOut.resize(nLength + 6);
         BYTE* pData = (BYTE*)strOut.c_str();
-        *(WORD*)pData = sHead; pData += 2;
-        *(DWORD*)pData = nLength; pData += 4;
-        *(WORD*)pData = sCmd; pData += 2;
-        memcpy(pData, sData.c_str(), sData.size()); pData += sData.size();
-        *(WORD*)pData = sSum;
+        *(WORD*)pData = sHead;
+        *(DWORD*)(pData + 2) = nLength;
+        *(WORD*)(pData + 2 + 4) = sCmd;
+        memcpy(pData + 2 + 4 + 2, sData.c_str(), sData.size());
+        *(WORD*)(pData + 2 + 4 + 2 + sData.size()) = sSum;
         return strOut.c_str();
     }
+
     ~CPacket() {}
 public:
     WORD sHead; // 包头，固定位： 0xFEFF
@@ -134,7 +164,7 @@ public:
     }
 
     // 初始化服务器
-    bool InitServer(const std::string& ip) {
+    bool InitServer(const std::string& ip, int port) {
         if (m_sock == INVALID_SOCKET) {
             return false;
         }
@@ -142,7 +172,7 @@ public:
         memset(&serv_addr, 0, sizeof(serv_addr));
         serv_addr.sin_family = AF_INET;
         serv_addr.sin_addr.s_addr = inet_addr(ip.c_str());
-        serv_addr.sin_port = htons(9527);
+        serv_addr.sin_port = htons(port);
         if (serv_addr.sin_addr.s_addr == INADDR_NONE) {
             AfxMessageBox(_T("IP地址错误"));
             return false;
@@ -193,6 +223,7 @@ public:
         if (m_sock == INVALID_SOCKET) {
             return false;
         }
+        TRACE(_T("Client Send 客户端发送数据包：%d\n"), packet.sCmd);
         return send(m_sock, packet.Data(), packet.Size(), 0) > 0;
     }
     // 获取文件路径
@@ -209,6 +240,9 @@ public:
             memcpy(&mouseEvent, m_packet.sData.c_str(), sizeof(MOUSEEV));
             return true;
         }
+    }
+    CPacket& GetPacket() {
+        return m_packet;
     }
 
 private:

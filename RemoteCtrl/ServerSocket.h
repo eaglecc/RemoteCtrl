@@ -8,24 +8,35 @@
 class CPacket {
 public:
     CPacket() :sHead(0), nLength(0), sCmd(0), sSum(0) {}
-    CPacket(WORD nCmd, const BYTE* pData, size_t nSize) {
+
+    //打包：封装成包
+    CPacket(WORD nCmd, const BYTE* pData, size_t nSize)
+    {
         sHead = 0xFEFF;
-        nLength = nSize + 2 + 2; // 命令(2) + 数据(nSize) + 校验和(2)
+        nLength = nSize + 4; // 命令(2) + 数据(nSize) + 校验和(2)
         sCmd = nCmd;
-        if (nSize > 0) {
+
+        if (nSize > 0)//有数据段
+        {
+            //打包数据段
             sData.resize(nSize);
             memcpy((void*)sData.c_str(), pData, nSize);
         }
-        else {
+        else//无数据段
+        {
             sData.clear();
         }
+
+        //打包检验位
         sSum = 0;
-        for (size_t i = 0; i < sData.size(); i++) {
-            BYTE  vlaue = BYTE(sData[i]) & 0xFF;
-            sSum += vlaue;
+        for (size_t j = 0; j < sData.size(); j++)
+        {
+            sSum += BYTE(sData[j]) & 0xFF;//只取字符低八位
         }
-        sSum = (WORD)(sSum & 0xFFFF);
+        TRACE("[服务器] sHead=%d nLength=%d data=[%s]  sSum=%d\r\n", sHead, nLength, sData.c_str(), sSum);
     }
+
+
     // 复制构造函数，用于拷贝数据包
     CPacket(const CPacket& packet) {
         sHead = packet.sHead;
@@ -45,44 +56,61 @@ public:
         }
         return *this;
     }
-    // 构造函数重载，从数据包中解析出各个字段
-    CPacket(const BYTE* pData, size_t nSize) {
+    // 构造函数重载，从数据包中解析出各个字段 解析包  拆包
+    CPacket(const BYTE* pData, size_t& nSize)
+    {
+        //包 [包头2 包长度4 控制命令2 包数据 和校验2]
         size_t i = 0;
-        for (; i < nSize; i++) {
-            if (*(WORD*)(pData + i) == 0xFEFF) {
-                sHead = *(WORD*)(pData + i); // 包头
+        //取包头位
+        for (; i < nSize; i++)
+        {
+            if ((*(WORD*)(pData + i)) == 0xFEFF)//找到包头
+            {
+                sHead = *(WORD*)(pData + i);
                 i += 2;
                 break;
             }
         }
-        if (i + 4 + 2 + 2 > nSize) { // 包数据可能不全，或者包头未能全部接收到
+
+        if ((i + 4 + 2 + 2) > nSize)//包数据不全 只有 [包头 包长度 控制命令 和校验]  没有数据段 解析失败
+        {
             nSize = 0;
             return;
         }
-        nLength = *(DWORD*)(pData + i); // 当前包长度
-        i += 4;
-        if (nLength + i > nSize) { // 包未全部接受到，就返回，解析失败
+
+        //取包长度位
+        nLength = *(DWORD*)(pData + i); i += 4;
+        if (nLength + i > nSize)//包未完全接收到 nLength+sizeof(包头)+sizeof(包长度) pData缓冲区越界了
+        {
             nSize = 0;
             return;
         }
-        sCmd = *(WORD*)(pData + i); // 控制命令
-        i += 2;
-        if (nLength > 4) {
-            sData.resize(nLength - 2 - 2); // 包数据
-            memcpy((void*)sData.c_str(), pData + i, nLength - 4); // 复制数据
-            i += nLength - 4;
+
+        //取出控制命令位
+        sCmd = *(WORD*)(pData + i); i += 2;
+
+        //保存数据段
+        if (nLength > 4)
+        {
+            sData.resize(nLength - 2 - 2);//nLength - [控制命令位长度] - [校验位长度]
+            memcpy((void*)sData.c_str(), pData + i, nLength - 4);
+            i = i + nLength - 2 - 2;
         }
-        sSum = *(WORD*)(pData + i); // 校验和
-        i += 2;
-        WORD sum = 0; 
-        for (size_t j = 0; j < sData.size(); j++) {
-            sum += BYTE(sData[j]) & 0xFF;
+
+        //取出校验位 并校验 校验位：由数据段的每个字符的低八位的和组成校验位
+        sSum = *(WORD*)(pData + i); i += 2;
+        WORD sum = 0;
+        for (size_t j = 0; j < sData.size(); j++)
+        {
+            sum += BYTE(sData[j]) & 0xFF;//只取字符低八位
         }
-        if (sum != sSum) { // 校验和错误
+        //TRACE("[客户端] sHead=%d nLength=%d data=[%s]  sSum=%d  sum = %d\r\n", sHead, nLength, strData.c_str(), sSum, sum);
+        if (sum == sSum)
+        {
             nSize = i;
             return;
         }
-        nSize = 0; // 解析失败
+        nSize = 0;
     }
 
     // 包数据大小
@@ -121,7 +149,7 @@ typedef struct MouseEvent {
     WORD nAction; // 点击、移动、双击
     WORD nButton; // 左键、右键、中键
     POINT ptXY; // 坐标
-}MOUSEEV,*PMOUSEEV;
+}MOUSEEV, * PMOUSEEV;
 
 class CServerSocket
 {
@@ -154,21 +182,31 @@ public:
 
     // 等待控制端连接
     bool AcceptClient() {
+        if (m_sock == INVALID_SOCKET) {
+            TRACE("服务器套接字无效。\n");
+            return false;
+        }
+
         sockaddr_in cli_addr;
         memset(&cli_addr, 0, sizeof(cli_addr));
         int cli_len = sizeof(cli_addr);
         m_cli_sock = accept(m_sock, (sockaddr*)&cli_addr, &cli_len);
+
         if (m_cli_sock == INVALID_SOCKET) {
+            TRACE("接受连接失败，错误码：%d\n", WSAGetLastError());
             return false;
         }
+
+        TRACE("收到了来自%s的连接请求\n   端口号：%d\n", inet_ntoa(cli_addr.sin_addr), ntohs(cli_addr.sin_port));
         return true;
     }
 #define BUFFER_SIZE 4096
-    // 处理控制端命令
+    // 处理客户端命令
     int DealCommand() {
         if (m_cli_sock == INVALID_SOCKET) {
             return -1;
         }
+        TRACE("开始处理客户端 %d的命令\n", m_cli_sock);
         char* buffer = new char[BUFFER_SIZE];
         memset(buffer, 0, BUFFER_SIZE);
         size_t index = 0;
@@ -177,6 +215,7 @@ public:
             if (recv_len <= 0) {
                 return -1;
             }
+            TRACE("收到数据包长度：%d , 内容：%s \n", recv_len, buffer);
             index += recv_len;
             recv_len = index;
             m_packet = CPacket((BYTE*)buffer, recv_len);
@@ -211,7 +250,7 @@ public:
         return false;
     }
     // 获取鼠标事件
-    bool GetMouseEvent(MOUSEEV& mouseEvent){
+    bool GetMouseEvent(MOUSEEV& mouseEvent) {
         if (m_packet.sCmd == 5) {
             memcpy(&mouseEvent, m_packet.sData.c_str(), sizeof(MOUSEEV));
             return true;
@@ -242,6 +281,7 @@ private:
             exit(0);
         }
         m_sock = socket(PF_INET, SOCK_STREAM, 0);
+        TRACE("服务器套接字：%d\n", m_sock);
     }
 
     ~CServerSocket() {
