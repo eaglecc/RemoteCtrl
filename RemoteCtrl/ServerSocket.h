@@ -100,6 +100,7 @@ public:
         return strOut.c_str();
     }
     ~CPacket() {}
+
 public:
     WORD sHead; // 包头，固定位： 0xFEFF
     DWORD nLength; // 包长度
@@ -217,6 +218,15 @@ public:
         }
     }
 
+    CPacket& GetPacket() {
+        return m_packet;
+    }
+
+    // 关闭客户端连接
+    void CloseClient() {
+        closesocket(m_cli_sock);
+        m_cli_sock = INVALID_SOCKET;
+    }
 private:
     CServerSocket& operator=(const CServerSocket&) {}
     CServerSocket(const CServerSocket& ss) {
