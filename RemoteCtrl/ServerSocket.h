@@ -4,10 +4,28 @@
 
 #pragma pack(push)
 #pragma pack(1)
-// 解析和处理数据包
+
+//包类
+//作用：用在网络的数据传输
+//格式：[0xFEFF | 包长度 | 控制命令 | 数据 | 检验位]
+//长度：[2B | 4B | 2B | data | 2B]
+//
+//设计：包长度 = 控制命令长度 + 数据长度 + 检验位长度
+//检验位 = 数据段每个字符的低八位的和
+//控制命令 = 代表此包进行的操作 例如 1查看分区 2查看文件 1981测试包
+//
+//接收方接收到包时，根据包头识别数据流中包的起始位置，根据控制命令进行相应的操作，根据检验位判断接收数据是否错误
 class CPacket {
 public:
-    CPacket() :sHead(0), nLength(0), sCmd(0), sSum(0) {}
+    WORD sHead; // 包头，固定位： 0xFEFF
+    DWORD nLength; // 包长度
+    WORD sCmd; // 控制命令
+    std::string sData; // 包数据
+    WORD sSum; // 和校验
+    std::string strOut; // 整个包的数据
+
+public:
+    CPacket() :sHead(0), nLength(0), sCmd(0), sSum(0){}
 
     //打包：封装成包
     CPacket(WORD nCmd, const BYTE* pData, size_t nSize)
@@ -33,7 +51,7 @@ public:
         {
             sSum += BYTE(sData[j]) & 0xFF;//只取字符低八位
         }
-        TRACE("[服务器] sHead=%d nLength=%d data=[%s]  sSum=%d\r\n", sHead, nLength, sData.c_str(), sSum);
+        TRACE("[服务端 封包] sHead=%d nLength=%d nCmd=%d data=[%s]  sSum=%d\r\n", sHead, nLength, sCmd, sData.c_str(), sSum);
     }
 
 
@@ -46,18 +64,21 @@ public:
         sSum = packet.sSum;
     }
     // 赋值运算符重载
-    CPacket& operator=(const CPacket& packet) {
-        if (this == &packet) {
-            sHead = packet.sHead;
-            nLength = packet.nLength;
-            sCmd = packet.sCmd;
-            sData = packet.sData;
-            sSum = packet.sSum;
+    CPacket& operator=(const CPacket& pack)
+    {
+        if (this != &pack)
+        {
+            sHead = pack.sHead;
+            nLength = pack.nLength;
+            sCmd = pack.sCmd;
+            sData = pack.sData;
+            sSum = pack.sSum;
         }
         return *this;
     }
-    // 构造函数重载，从数据包中解析出各个字段 解析包  拆包
-    CPacket(const BYTE* pData, size_t& nSize)
+
+    // 解析包  拆包
+    CPacket(const BYTE* pData, size_t& nSize): sHead(0), nLength(0), sCmd(0), sSum(0)
     {
         //包 [包头2 包长度4 控制命令2 包数据 和校验2]
         size_t i = 0;
@@ -104,10 +125,11 @@ public:
         {
             sum += BYTE(sData[j]) & 0xFF;//只取字符低八位
         }
-        //TRACE("[客户端] sHead=%d nLength=%d data=[%s]  sSum=%d  sum = %d\r\n", sHead, nLength, strData.c_str(), sSum, sum);
-        if (sum == sSum)
+        //if (sum == sSum)
+        if (sData.empty() && sum == 0) // 数据为空，校验和为0时可能是合法包
         {
             nSize = i;
+            TRACE("[服务端 拆包] sHead=%d nLength=%d nCmd=%d data=[%s]  sSum=%d\r\n", sHead, nLength, sCmd, sData.c_str(), sSum);
             return;
         }
         nSize = 0;
@@ -117,6 +139,7 @@ public:
     int Size() {
         return nLength + 2 + 4;
     }
+
     const char* Data() {
         strOut.resize(nLength + 2 + 4);
         BYTE* pData = (BYTE*)strOut.c_str();
@@ -129,13 +152,6 @@ public:
     }
     ~CPacket() {}
 
-public:
-    WORD sHead; // 包头，固定位： 0xFEFF
-    DWORD nLength; // 包长度
-    WORD sCmd; // 控制命令
-    std::string sData; // 包数据
-    WORD sSum; // 和校验
-    std::string strOut; // 整个包的数据
 };
 #pragma pack(pop)
 
@@ -206,21 +222,23 @@ public:
         if (m_cli_sock == INVALID_SOCKET) {
             return -1;
         }
-        TRACE("开始处理客户端 %d的命令\n", m_cli_sock);
+        TRACE("[服务端] DealCommand开始处理客户端 %d的命令\n", m_cli_sock);
         char* buffer = new char[BUFFER_SIZE];
         memset(buffer, 0, BUFFER_SIZE);
         size_t index = 0;
         while (true) {
             size_t recv_len = recv(m_cli_sock, buffer + index, BUFFER_SIZE - index, 0);
+
             if (recv_len <= 0) {
                 return -1;
             }
-            TRACE("收到数据包长度：%d , 内容：%s \n", recv_len, buffer);
             index += recv_len;
             recv_len = index;
-            m_packet = CPacket((BYTE*)buffer, recv_len);
+            CPacket m_packet =CPacket((BYTE*)buffer, recv_len);//recv_len传入：buffer数据长度   recv_len传出：成功解析数据长度
+            TRACE("[服务端] 收到包头：%d, 包长度：%d, 控制命令：%d, 内容：%s, 校验和：%d \n", m_packet.sHead, recv_len, m_packet.sCmd, m_packet.sData.c_str(), m_packet.sSum);
+
             if (recv_len > 0) {
-                memmove(buffer, buffer + recv_len, BUFFER_SIZE - recv_len);
+                memmove(buffer, buffer + recv_len, index - recv_len);
                 index -= recv_len;
                 return m_packet.sCmd;
             }
@@ -321,5 +339,3 @@ private:
     SOCKET m_cli_sock;
     CPacket m_packet;
 };
-
-extern CServerSocket server;

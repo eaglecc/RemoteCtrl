@@ -31,7 +31,7 @@ public:
         {
             sSum += BYTE(sData[j]) & 0xFF;//只取字符低八位
         }
-        TRACE("[客户端] sHead=%d nLength=%d data=[%s]  sSum=%d\r\n", sHead, nLength, sData.c_str(), sSum);
+        TRACE("[客户端 封包] sHead=%d nLength=%d nCmd=%d data=[%s]  sSum=%d\r\n", sHead, nLength, sCmd, sData.c_str(), sSum);
     }
 
     // 复制构造函数，用于拷贝数据包
@@ -43,16 +43,19 @@ public:
         sSum = packet.sSum;
     }
     // 赋值运算符重载
-    CPacket& operator=(const CPacket& packet) {
-        if (this == &packet) {
-            sHead = packet.sHead;
-            nLength = packet.nLength;
-            sCmd = packet.sCmd;
-            sData = packet.sData;
-            sSum = packet.sSum;
+    CPacket& operator=(const CPacket& pack)
+    {
+        if (this != &pack)
+        {
+            sHead = pack.sHead;
+            nLength = pack.nLength;
+            sCmd = pack.sCmd;
+            sData = pack.sData;
+            sSum = pack.sSum;
         }
         return *this;
     }
+
     // 构造函数重载，从数据包中解析出各个字段 解析包  拆包
     CPacket(const BYTE* pData, size_t& nSize)
     {
@@ -204,7 +207,9 @@ public:
             recv_len = index;
             m_packet = CPacket((BYTE*)buffer, recv_len);
             if (recv_len > 0) {
-                memmove(buffer, buffer + recv_len, BUFFER_SIZE - recv_len);
+                //memmove(buffer, buffer + recv_len, BUFFER_SIZE - recv_len);
+                memmove(buffer, buffer + recv_len, index - recv_len);
+
                 index -= recv_len;
                 return m_packet.sCmd;
             }
@@ -223,7 +228,7 @@ public:
         if (m_sock == INVALID_SOCKET) {
             return false;
         }
-        TRACE(_T("Client Send 客户端发送数据包：%d\n"), packet.sCmd);
+        TRACE(_T("[客户端] Client Send 客户端发送数据包的控制命令：%d\n"), packet.sCmd);
         return send(m_sock, packet.Data(), packet.Size(), 0) > 0;
     }
     // 获取文件路径

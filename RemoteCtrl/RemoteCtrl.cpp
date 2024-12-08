@@ -412,15 +412,15 @@ int main()
                     Sleep(1000); 
                     continue;
                 }
-                TRACE("客户端连接成功\r\n");
+                TRACE("[服务端] main 客户端连接成功\r\n");
                 // 3. 处理客户端命令
                 int ret = pserver->DealCommand();
-                TRACE("服务器处理命令：%d\r\n", ret);
+                TRACE("[服务端] 服务器处理命令：%d\r\n", ret);
                 if (ret > 0)
                 {
                     ret = ExcuteCommand(ret);
                     if (ret != 0) {
-                        TRACE("命令执行失败：%d\r\n", ret);
+                        TRACE("[服务端] 命令执行失败：%d\r\n", ret);
                     }
                     pserver->CloseClient();
                 }

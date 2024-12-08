@@ -166,7 +166,7 @@ void CRemoteClientDlg::OnBnClickedBtnTest()
     }
     CPacket packet(2000, NULL, 0);
     ret = pClient->Send(packet);
-    TRACE("客户端发送结果:%d\r\n", ret);
+    TRACE("[客户端] 客户端发送结果:%d\r\n", ret);
     int cmd = pClient->DealCommand();
-    TRACE("客户端收到服务端发来的命令:%d\r\n", cmd);
+    TRACE("[客户端] 客户端收到服务端发来的命令:%d\r\n", cmd);
 }
