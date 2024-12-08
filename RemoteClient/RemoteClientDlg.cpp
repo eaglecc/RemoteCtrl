@@ -169,4 +169,5 @@ void CRemoteClientDlg::OnBnClickedBtnTest()
     TRACE("[客户端] 客户端发送结果:%d\r\n", ret);
     int cmd = pClient->DealCommand();
     TRACE("[客户端] 客户端收到服务端发来的命令:%d\r\n", cmd);
+    pClient->CloseSocket();
 }

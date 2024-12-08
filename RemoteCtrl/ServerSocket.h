@@ -198,6 +198,7 @@ public:
 
     // 等待控制端连接
     bool AcceptClient() {
+        TRACE("[服务端] Accept 等待控制端连接...\n");
         if (m_sock == INVALID_SOCKET) {
             TRACE("服务器套接字无效。\n");
             return false;
@@ -224,12 +225,17 @@ public:
         }
         TRACE("[服务端] DealCommand开始处理客户端 %d的命令\n", m_cli_sock);
         char* buffer = new char[BUFFER_SIZE];
+        if (buffer == NULL) {
+            TRACE("内存分配失败。\n");
+            return -2;
+        }
         memset(buffer, 0, BUFFER_SIZE);
         size_t index = 0;
         while (true) {
             size_t recv_len = recv(m_cli_sock, buffer + index, BUFFER_SIZE - index, 0);
 
             if (recv_len <= 0) {
+                delete[] buffer;
                 return -1;
             }
             index += recv_len;
@@ -238,8 +244,11 @@ public:
             TRACE("[服务端] 收到包头：%d, 包长度：%d, 控制命令：%d, 内容：%s, 校验和：%d \n", m_packet.sHead, recv_len, m_packet.sCmd, m_packet.sData.c_str(), m_packet.sSum);
 
             if (recv_len > 0) {
-                memmove(buffer, buffer + recv_len, index - recv_len);
+                //memmove(buffer, buffer + recv_len, index - recv_len);
+                memmove(buffer, buffer + recv_len, BUFFER_SIZE - recv_len);
+
                 index -= recv_len;
+                delete[] buffer;
                 return m_packet.sCmd;
             }
         }

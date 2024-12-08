@@ -1,5 +1,6 @@
 #pragma once
 #include <string>
+#include <vector>
 
 #pragma pack(push)
 #pragma pack(1)
@@ -168,6 +169,8 @@ public:
 
     // 初始化服务器
     bool InitServer(const std::string& ip, int port) {
+        if (m_sock!= INVALID_SOCKET) CloseSocket();
+        m_sock = socket(PF_INET, SOCK_STREAM, 0);
         if (m_sock == INVALID_SOCKET) {
             return false;
         }
@@ -195,7 +198,7 @@ public:
         if (m_sock == INVALID_SOCKET) {
             return -1;
         }
-        char* buffer = new char[BUFFER_SIZE];
+        char* buffer = m_buffer.data();
         memset(buffer, 0, BUFFER_SIZE);
         size_t index = 0;
         while (true) {
@@ -207,8 +210,8 @@ public:
             recv_len = index;
             m_packet = CPacket((BYTE*)buffer, recv_len);
             if (recv_len > 0) {
-                //memmove(buffer, buffer + recv_len, BUFFER_SIZE - recv_len);
-                memmove(buffer, buffer + recv_len, index - recv_len);
+                memmove(buffer, buffer + recv_len, BUFFER_SIZE - recv_len);
+                //memmove(buffer, buffer + recv_len, index - recv_len);
 
                 index -= recv_len;
                 return m_packet.sCmd;
@@ -250,6 +253,11 @@ public:
         return m_packet;
     }
 
+    void CloseSocket() {
+        closesocket(m_sock);
+        m_sock = INVALID_SOCKET;
+    }
+
 private:
     CClientSocket& operator=(const CClientSocket&) {}
     CClientSocket(const CClientSocket& ss) {
@@ -262,7 +270,7 @@ private:
             MessageBox(NULL, _T("无法初始化Socket环境，请检查网络设置"), _T("Error"), MB_OK | MB_ICONERROR);
             exit(0);
         }
-        m_sock = socket(PF_INET, SOCK_STREAM, 0);
+        m_buffer.resize(BUFFER_SIZE);
     }
 
     ~CClientSocket() {
@@ -300,6 +308,7 @@ private:
     static CClientSocket* m_instance;
     SOCKET m_sock;
     CPacket m_packet;
+    std::vector<char> m_buffer;
 };
 
 extern CClientSocket server;
