@@ -168,7 +168,7 @@ public:
     }
 
     // 初始化服务器
-    bool InitServer(const std::string& ip, int port) {
+    bool InitServer(int nIP, int port) {
         if (m_sock!= INVALID_SOCKET) CloseSocket();
         m_sock = socket(PF_INET, SOCK_STREAM, 0);
         if (m_sock == INVALID_SOCKET) {
@@ -177,7 +177,7 @@ public:
         sockaddr_in serv_addr;
         memset(&serv_addr, 0, sizeof(serv_addr));
         serv_addr.sin_family = AF_INET;
-        serv_addr.sin_addr.s_addr = inet_addr(ip.c_str());
+        serv_addr.sin_addr.s_addr = htonl(nIP);
         serv_addr.sin_port = htons(port);
         if (serv_addr.sin_addr.s_addr == INADDR_NONE) {
             AfxMessageBox(_T("IP地址错误"));
