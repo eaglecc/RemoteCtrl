@@ -63,6 +63,7 @@ void CRemoteClientDlg::DoDataExchange(CDataExchange* pDX)
     CDialogEx::DoDataExchange(pDX);
     DDX_IPAddress(pDX, IDC_IPADDRESS_SERV, m_server_address);
     DDX_Text(pDX, IDC_EDIT_PORT, m_nPort);
+    DDX_Control(pDX, IDC_TREE_DIR, m_Tree);
 }
 
 BEGIN_MESSAGE_MAP(CRemoteClientDlg, CDialogEx)
@@ -70,6 +71,7 @@ BEGIN_MESSAGE_MAP(CRemoteClientDlg, CDialogEx)
     ON_WM_PAINT()
     ON_WM_QUERYDRAGICON()
     ON_BN_CLICKED(IDC_BTN_TEST, &CRemoteClientDlg::OnBnClickedBtnTest)
+    ON_BN_CLICKED(IDC_BUTTON_FILEINFO, &CRemoteClientDlg::OnBnClickedButtonFileinfo)
 END_MESSAGE_MAP()
 
 
@@ -163,20 +165,53 @@ HCURSOR CRemoteClientDlg::OnQueryDragIcon()
 }
 
 
-
-void CRemoteClientDlg::OnBnClickedBtnTest()
+int CRemoteClientDlg::SendCommandPacket(int nCmd, BYTE* pData, size_t nLength)
 {
     UpdateData();
     CClientSocket* pClient = CClientSocket::getInstance();
     bool ret = pClient->InitServer(m_server_address, atoi((LPCTSTR)m_nPort));
     if (!ret) {
         AfxMessageBox(_T("连接服务器失败"));
-        return;
+        return -1;
     }
-    CPacket packet(2000, NULL, 0);
+    CPacket packet(nCmd, pData, nLength);
     ret = pClient->Send(packet);
     TRACE("[客户端] 客户端发送结果:%d\r\n", ret);
     int cmd = pClient->DealCommand();
     TRACE("[客户端] 客户端收到服务端发来的命令:%d\r\n", cmd);
     pClient->CloseSocket();
+
+    return cmd;
+}
+
+
+void CRemoteClientDlg::OnBnClickedBtnTest()
+{
+    SendCommandPacket(2000);
+}
+
+
+void CRemoteClientDlg::OnBnClickedButtonFileinfo()
+{
+    int ret = SendCommandPacket(1);
+    if (ret == -1)
+    {
+        AfxMessageBox(_T("连接服务器失败"));
+        return;
+    }
+    CClientSocket* pClient = CClientSocket::getInstance();
+    std::string drivers = pClient->GetPacket().sData;
+    std::string dr;
+    m_Tree.DeleteAllItems();
+    for (size_t i = 0; i < drivers.size(); i++)
+    {
+        if (drivers[i] == ',') {
+            dr += ":";
+            m_Tree.InsertItem(dr.c_str(), TVI_ROOT, TVI_LAST);
+            dr.clear();
+            continue;
+        }
+        // TODO: 盘符C,D,E，仅读出了C,D
+        dr += drivers[i];
+    }
 }
