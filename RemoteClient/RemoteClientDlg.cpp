@@ -164,7 +164,6 @@ HCURSOR CRemoteClientDlg::OnQueryDragIcon()
     return static_cast<HCURSOR>(m_hIcon);
 }
 
-
 int CRemoteClientDlg::SendCommandPacket(int nCmd, BYTE* pData, size_t nLength)
 {
     UpdateData();
@@ -201,17 +200,17 @@ void CRemoteClientDlg::OnBnClickedButtonFileinfo()
     }
     CClientSocket* pClient = CClientSocket::getInstance();
     std::string drivers = pClient->GetPacket().sData;
-    std::string dr;
     m_Tree.DeleteAllItems();
-    for (size_t i = 0; i < drivers.size(); i++)
-    {
-        if (drivers[i] == ',') {
-            dr += ":";
-            m_Tree.InsertItem(dr.c_str(), TVI_ROOT, TVI_LAST);
-            dr.clear();
-            continue;
-        }
-        // TODO: 盘符C,D,E，仅读出了C,D
-        dr += drivers[i];
+    size_t start = 0;
+    size_t end = drivers.find(',');
+    while (end != std::string::npos) {
+        std::string str = drivers.substr(start, end - start) + ":";
+        m_Tree.InsertItem(str.c_str(), TVI_ROOT, TVI_LAST);
+        start = end + 1;
+        end = drivers.find(',', start);
+    }
+    if (start < drivers.size()) {
+        std::string str = drivers.substr(start, end - start) + ":";
+        m_Tree.InsertItem(str.c_str(), TVI_ROOT, TVI_LAST);
     }
 }
