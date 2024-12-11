@@ -53,18 +53,6 @@ int MakeDriverInfo() { // 1==> A盘, 2==>B盘, 3==>C盘...,26=>Z盘
 
 #include <io.h>
 #include <list>
-typedef struct file_info {
-    file_info() {
-        IsInvalid = FALSE;
-        memset(szFileName, 0, sizeof(szFileName));
-        IsDirectory = -1;
-        HasNext = FALSE;
-    }
-    BOOL IsInvalid; // 是否是无效文件
-    char szFileName[256]; // 文件名
-    BOOL IsDirectory; // 是否是目录
-    BOOL HasNext; // 是否有下一个文件
-}FILEINFO, * PFILEINFO;
 
 // 创建指定目录下的文件信息
 int MakeDirectoryInfo() {
@@ -76,8 +64,6 @@ int MakeDirectoryInfo() {
     }
     if (_chdir(strPath.c_str()) != 0) { // 将当前进程的工作目录更改为 strPath 指定的路径
         FILEINFO fileInfo;
-        fileInfo.IsInvalid = TRUE;
-        fileInfo.IsDirectory = TRUE;
         fileInfo.HasNext = FALSE;
         memcpy(fileInfo.szFileName, strPath.c_str(), strPath.size());
         //fileInfoLists.push_back(fileInfo);
@@ -90,6 +76,10 @@ int MakeDirectoryInfo() {
     int hfind = 0;
     if ((hfind = _findfirst("*", &fdata)) == -1) {
         OutputDebugString(_T("无法找到文件"));
+        FILEINFO fileInfo;
+        fileInfo.HasNext = FALSE;
+        CPacket pack((WORD)2, (BYTE*)&fileInfo, (size_t)sizeof(fileInfo));
+        CServerSocket::getInstance()->Send(pack);
         return -3;
     }
     do
