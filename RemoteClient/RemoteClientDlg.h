@@ -23,7 +23,7 @@ protected:
 private:
     // 1. 查看磁盘分区 2. 查看指定目录的文件列表 3. 打开文件 4. 下载文件
     // 返回值是控制命令号
-    int SendCommandPacket(int nCmd, BYTE* pData = NULL, size_t nLength = 0);
+    int SendCommandPacket(int nCmd, bool bAutoClose = true, BYTE* pData = NULL, size_t nLength = 0);
     CString GetPath(HTREEITEM hTree);
     void DeleteTreeChilrenItem(HTREEITEM hTree);
     

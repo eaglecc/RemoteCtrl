@@ -165,7 +165,7 @@ HCURSOR CRemoteClientDlg::OnQueryDragIcon()
     return static_cast<HCURSOR>(m_hIcon);
 }
 
-int CRemoteClientDlg::SendCommandPacket(int nCmd, BYTE* pData, size_t nLength)
+int CRemoteClientDlg::SendCommandPacket(int nCmd, bool bAutoClose, BYTE* pData, size_t nLength)
 {
     UpdateData();
     CClientSocket* pClient = CClientSocket::getInstance();
@@ -178,8 +178,9 @@ int CRemoteClientDlg::SendCommandPacket(int nCmd, BYTE* pData, size_t nLength)
     ret = pClient->Send(packet);
     TRACE("[客户端] 客户端发送结果:%d\r\n", ret);
     int cmd = pClient->DealCommand();
-    TRACE("[客户端] 客户端收到服务端发来的命令:%d\r\n", cmd);
-    pClient->CloseSocket();
+    TRACE("[客户端] 客户端收到服务端发来的命令号:%d\r\n", cmd);
+    if (bAutoClose)
+        pClient->CloseSocket();
 
     return cmd;
 }
@@ -259,11 +260,11 @@ void CRemoteClientDlg::OnNMDblclkTreeDir(NMHDR* pNMHDR, LRESULT* pResult)
         return;
     if (m_Tree.GetChildItem(hTreeSelected) == NULL) return; // 文件节点，直接返回
 
-    DeleteTreeChilrenItem(hTreeSelected);
+    //DeleteTreeChilrenItem(hTreeSelected); // 删除子节点
 
     CString strPath = GetPath(hTreeSelected);
-    int nCmd = SendCommandPacket(2, (BYTE*)strPath.GetBuffer(), strPath.GetLength());
-    PFILEINFO pInfo = (PFILEINFO)CClientSocket::getInstance()->GetPacket().Data();
+    int nCmd = SendCommandPacket(2, false, (BYTE*)(LPCSTR)strPath, strPath.GetLength());
+    PFILEINFO pInfo = (PFILEINFO)CClientSocket::getInstance()->GetPacket().sData.c_str();
     CClientSocket* pClient = CClientSocket::getInstance();
 
     while (pInfo->HasNext) {
@@ -272,7 +273,9 @@ void CRemoteClientDlg::OnNMDblclkTreeDir(NMHDR* pNMHDR, LRESULT* pResult)
                 int cmd = pClient->DealCommand();
                 TRACE("[客户端] [CRemoteClientDlg::OnNMDblclkTreeDir] ack:%d\r\n", cmd);
                 if (cmd < 0) break;
+                //TODO: 考虑这行代码可行？ pInfo = (PFILEINFO)CClientSocket::getInstance()->GetPacket().sData.c_str();
                 pInfo = (PFILEINFO)CClientSocket::getInstance()->GetPacket().Data();
+
                 continue;
             }
         }
@@ -285,7 +288,7 @@ void CRemoteClientDlg::OnNMDblclkTreeDir(NMHDR* pNMHDR, LRESULT* pResult)
         int cmd = pClient->DealCommand();
         TRACE("[客户端] [CRemoteClientDlg::OnNMDblclkTreeDir] ack:%d\r\n", cmd);
         if (cmd < 0) break;
-        pInfo = (PFILEINFO)CClientSocket::getInstance()->GetPacket().Data();
+        pInfo = (PFILEINFO)CClientSocket::getInstance()->GetPacket().sData.c_str();
     }
 
     pClient->CloseSocket();

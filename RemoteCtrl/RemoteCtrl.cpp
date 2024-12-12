@@ -65,7 +65,7 @@ int MakeDirectoryInfo() {
     if (_chdir(strPath.c_str()) != 0) { // 将当前进程的工作目录更改为 strPath 指定的路径
         FILEINFO fileInfo;
         fileInfo.HasNext = FALSE;
-        memcpy(fileInfo.szFileName, strPath.c_str(), strPath.size());
+        //memcpy(fileInfo.szFileName, strPath.c_str(), strPath.size());
         //fileInfoLists.push_back(fileInfo);
         CPacket pack((WORD)2, (BYTE*)&fileInfo, (size_t)sizeof(fileInfo));
         CServerSocket::getInstance()->Send(pack);
@@ -87,6 +87,7 @@ int MakeDirectoryInfo() {
         FILEINFO fileInfo;
         fileInfo.IsDirectory = (fdata.attrib & _A_SUBDIR) != 0;
         memcpy(fileInfo.szFileName, fdata.name, strlen(fdata.name));
+        TRACE("[服务端] [MakeDirectoryInfo] [拿到的文件信息名：] %s\r\n", fileInfo.szFileName);
         //fileInfoLists.push_back(fileInfo);
         CPacket pack((WORD)2, (BYTE*)&fileInfo, (size_t)sizeof(fileInfo));
         CServerSocket::getInstance()->Send(pack);
@@ -94,6 +95,8 @@ int MakeDirectoryInfo() {
     // 发送信息到客户端
     FILEINFO fileInfo;
     fileInfo.HasNext = FALSE;
+    CPacket pack((WORD)2, (BYTE*)&fileInfo, (size_t)sizeof(fileInfo));
+    CServerSocket::getInstance()->Send(pack);
     return 0;
 }
 
@@ -399,7 +402,7 @@ int main()
                     }
                     MessageBox(NULL, L"无法接受客户端连接，自动重试", L"错误", MB_OK | MB_ICONERROR);
                     count++;
-                    Sleep(1000); 
+                    Sleep(1000);
                     continue;
                 }
                 TRACE("[服务端] main 客户端连接成功\r\n");
