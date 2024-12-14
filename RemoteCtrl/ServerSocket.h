@@ -2,9 +2,10 @@
 #include "framework.h"
 #include "pch.h"
 
+void Dump(BYTE* pData, size_t nSize);
+
 #pragma pack(push)
 #pragma pack(1)
-
 //包类
 //作用：用在网络的数据传输
 //格式：[0xFEFF | 包长度 | 控制命令 | 数据 | 检验位]
@@ -31,7 +32,7 @@ public:
     CPacket(WORD nCmd, const BYTE* pData, size_t nSize)
     {
         sHead = 0xFEFF;
-        nLength = nSize + 4; // 命令(2) + 数据(nSize) + 校验和(2)
+        nLength = (nSize + 4); // 命令(2) + 数据(nSize) + 校验和(2)
         sCmd = nCmd;
 
         if (nSize > 0)//有数据段
@@ -77,8 +78,9 @@ public:
         return *this;
     }
 
+    // TODO: 看size_t nSize 和 size_t& nSize 哪个正确？
     // 解析包  拆包
-    CPacket(const BYTE* pData, size_t& nSize): sHead(0), nLength(0), sCmd(0), sSum(0)
+    CPacket(const BYTE* pData, size_t &nSize): sHead(0), nLength(0), sCmd(0), sSum(0)
     {
         //包 [包头2 包长度4 控制命令2 包数据 和校验2]
         size_t i = 0;
@@ -136,7 +138,7 @@ public:
     }
 
     // 包数据大小
-    int Size() {
+    size_t Size() {
         return nLength + 2 + 4;
     }
 
@@ -254,7 +256,7 @@ public:
             }
             index += recv_len;
             recv_len = index;
-            CPacket m_packet =CPacket((BYTE*)buffer, recv_len);//recv_len传入：buffer数据长度   recv_len传出：成功解析数据长度
+            m_packet =CPacket((BYTE*)buffer, recv_len);//recv_len传入：buffer数据长度   recv_len传出：成功解析数据长度
             TRACE("[服务端] 收到包头：%d, 包长度：%d, 控制命令：%d, 内容：%s, 校验和：%d \n", m_packet.sHead, recv_len, m_packet.sCmd, m_packet.sData.c_str(), m_packet.sSum);
 
             if (recv_len > 0) {
@@ -280,6 +282,8 @@ public:
         if (m_cli_sock == INVALID_SOCKET) {
             return false;
         }
+        Dump((BYTE*)packet.Data(),packet.Size());
+
         return send(m_cli_sock, packet.Data(), packet.Size(), 0) > 0;
     }
     // 获取文件路径

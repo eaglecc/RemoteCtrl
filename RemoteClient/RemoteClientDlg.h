@@ -21,6 +21,7 @@ protected:
     virtual void DoDataExchange(CDataExchange* pDX);	// DDX/DDV 支持
 
 private:
+    void LoadFileInfo();
     // 1. 查看磁盘分区 2. 查看指定目录的文件列表 3. 打开文件 4. 下载文件
     // 返回值是控制命令号
     int SendCommandPacket(int nCmd, bool bAutoClose = true, BYTE* pData = NULL, size_t nLength = 0);
@@ -46,4 +47,8 @@ public:
     CTreeCtrl m_Tree;
     afx_msg void OnNMDblclkTreeDir(NMHDR* pNMHDR, LRESULT* pResult);
 
+    afx_msg void OnNMClickTreeDir(NMHDR* pNMHDR, LRESULT* pResult);
+    // 显示文件
+    CListCtrl m_List;
+    afx_msg void OnNMRClickListFile(NMHDR* pNMHDR, LRESULT* pResult);
 };

@@ -64,7 +64,9 @@ void CRemoteClientDlg::DoDataExchange(CDataExchange* pDX)
     DDX_IPAddress(pDX, IDC_IPADDRESS_SERV, m_server_address);
     DDX_Text(pDX, IDC_EDIT_PORT, m_nPort);
     DDX_Control(pDX, IDC_TREE_DIR, m_Tree);
+    DDX_Control(pDX, IDC_LIST_FILE, m_List);
 }
+
 
 BEGIN_MESSAGE_MAP(CRemoteClientDlg, CDialogEx)
     ON_WM_SYSCOMMAND()
@@ -73,6 +75,8 @@ BEGIN_MESSAGE_MAP(CRemoteClientDlg, CDialogEx)
     ON_BN_CLICKED(IDC_BTN_TEST, &CRemoteClientDlg::OnBnClickedBtnTest)
     ON_BN_CLICKED(IDC_BUTTON_FILEINFO, &CRemoteClientDlg::OnBnClickedButtonFileinfo)
     ON_NOTIFY(NM_DBLCLK, IDC_TREE_DIR, &CRemoteClientDlg::OnNMDblclkTreeDir)
+    ON_NOTIFY(NM_CLICK, IDC_TREE_DIR, &CRemoteClientDlg::OnNMClickTreeDir)
+    ON_NOTIFY(NM_RCLICK, IDC_LIST_FILE, &CRemoteClientDlg::OnNMRClickListFile)
 END_MESSAGE_MAP()
 
 
@@ -243,15 +247,13 @@ void CRemoteClientDlg::DeleteTreeChilrenItem(HTREEITEM hTree)
     HTREEITEM hSub = NULL;
     do {
         hSub = m_Tree.GetChildItem(hTree);
-        if (hSub != NULL)
-            DeleteTreeChilrenItem(hSub);
+        if (hSub != NULL) m_Tree.DeleteItem(hSub);
     } while (hSub != NULL);
 }
 
-// 树控件双击
-void CRemoteClientDlg::OnNMDblclkTreeDir(NMHDR* pNMHDR, LRESULT* pResult)
+
+void CRemoteClientDlg::LoadFileInfo()
 {
-    *pResult = 0;
     CPoint pt;
     GetCursorPos(&pt);
     m_Tree.ScreenToClient(&pt);
@@ -260,29 +262,34 @@ void CRemoteClientDlg::OnNMDblclkTreeDir(NMHDR* pNMHDR, LRESULT* pResult)
         return;
     if (m_Tree.GetChildItem(hTreeSelected) == NULL) return; // 文件节点，直接返回
 
-    //DeleteTreeChilrenItem(hTreeSelected); // 删除子节点
+    DeleteTreeChilrenItem(hTreeSelected); // 删除子节点
 
     CString strPath = GetPath(hTreeSelected);
     int nCmd = SendCommandPacket(2, false, (BYTE*)(LPCSTR)strPath, strPath.GetLength());
+    if (nCmd < 0)
+    {
+        return;
+    }
     PFILEINFO pInfo = (PFILEINFO)CClientSocket::getInstance()->GetPacket().sData.c_str();
     CClientSocket* pClient = CClientSocket::getInstance();
 
+    m_List.DeleteAllItems();
     while (pInfo->HasNext) {
+        TRACE("[客户端] [CRemoteClientDlg::OnNMDblclkTreeDir] 文件名:%s，是否是文件:%s\r\n", pInfo->szFileName, pInfo->IsDirectory);
         if (pInfo->IsDirectory) {
             if (CString(pInfo->szFileName) == "." || CString(pInfo->szFileName) == "..") {
                 int cmd = pClient->DealCommand();
                 TRACE("[客户端] [CRemoteClientDlg::OnNMDblclkTreeDir] ack:%d\r\n", cmd);
                 if (cmd < 0) break;
-                //TODO: 考虑这行代码可行？ pInfo = (PFILEINFO)CClientSocket::getInstance()->GetPacket().sData.c_str();
-                pInfo = (PFILEINFO)CClientSocket::getInstance()->GetPacket().Data();
-
+                pInfo = (PFILEINFO)CClientSocket::getInstance()->GetPacket().sData.c_str();
                 continue;
             }
-        }
-
-        HTREEITEM hTemp = m_Tree.InsertItem(pInfo->szFileName, hTreeSelected, TVI_LAST);
-        if (pInfo->IsDirectory) {
+            HTREEITEM hTemp = m_Tree.InsertItem(pInfo->szFileName, hTreeSelected, TVI_LAST);
             m_Tree.InsertItem("", hTemp, TVI_LAST);
+
+        }
+        else {
+            m_List.InsertColumn(0, pInfo->szFileName);
         }
 
         int cmd = pClient->DealCommand();
@@ -292,4 +299,38 @@ void CRemoteClientDlg::OnNMDblclkTreeDir(NMHDR* pNMHDR, LRESULT* pResult)
     }
 
     pClient->CloseSocket();
+}
+
+// 树控件双击
+void CRemoteClientDlg::OnNMDblclkTreeDir(NMHDR* pNMHDR, LRESULT* pResult)
+{
+    *pResult = 0;
+    LoadFileInfo();
+}
+
+
+void CRemoteClientDlg::OnNMClickTreeDir(NMHDR* pNMHDR, LRESULT* pResult)
+{
+    *pResult = 0;
+    LoadFileInfo();
+}
+
+// 列表控件右键，实现文件打开下载功能
+void CRemoteClientDlg::OnNMRClickListFile(NMHDR* pNMHDR, LRESULT* pResult)
+{
+    LPNMITEMACTIVATE pNMItemActivate = reinterpret_cast<LPNMITEMACTIVATE>(pNMHDR);
+    *pResult = 0;
+    CPoint ptMouse, ptList;
+    GetCursorPos(&ptMouse);
+    ptList = ptMouse;
+    m_List.ScreenToClient(&ptList);
+    int ListSelected = m_List.HitTest(ptList);
+    if (ListSelected < 0) return;
+    CMenu menu;
+    menu.LoadMenu(IDR_MENU_RCLICK);
+    CMenu* pSubMenu = menu.GetSubMenu(0);
+    if (pSubMenu != NULL)
+    {
+        pSubMenu->TrackPopupMenu(TPM_LEFTALIGN | TPM_RIGHTBUTTON, ptMouse.x, ptMouse.y, this);
+    }
 }
