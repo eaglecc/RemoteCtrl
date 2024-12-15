@@ -9,7 +9,7 @@ void Dump(BYTE* pData, size_t nSize);
 //包类
 //作用：用在网络的数据传输
 //格式：[0xFEFF | 包长度 | 控制命令 | 数据 | 检验位]
-//长度：[2B | 4B | 2B | data | 2B]
+//长度：[2B     |    4B |       2B | data|     2B]
 //
 //设计：包长度 = 控制命令长度 + 数据长度 + 检验位长度
 //检验位 = 数据段每个字符的低八位的和
@@ -26,7 +26,7 @@ public:
     std::string strOut; // 整个包的数据
 
 public:
-    CPacket() :sHead(0), nLength(0), sCmd(0), sSum(0){}
+    CPacket() :sHead(0), nLength(0), sCmd(0), sSum(0) {}
 
     //打包：封装成包
     CPacket(WORD nCmd, const BYTE* pData, size_t nSize)
@@ -78,9 +78,8 @@ public:
         return *this;
     }
 
-    // TODO: 看size_t nSize 和 size_t& nSize 哪个正确？
     // 解析包  拆包
-    CPacket(const BYTE* pData, size_t &nSize): sHead(0), nLength(0), sCmd(0), sSum(0)
+    CPacket(const BYTE* pData, size_t& nSize) : sHead(0), nLength(0), sCmd(0), sSum(0)
     {
         //包 [包头2 包长度4 控制命令2 包数据 和校验2]
         size_t i = 0;
@@ -117,7 +116,7 @@ public:
         {
             sData.resize(nLength - 2 - 2);//nLength - [控制命令位长度] - [校验位长度]
             memcpy((void*)sData.c_str(), pData + i, nLength - 4);
-            i = i + nLength - 2 - 2;
+            i = i + (nLength - 2 - 2);
         }
 
         //取出校验位 并校验 校验位：由数据段的每个字符的低八位的和组成校验位
@@ -127,8 +126,7 @@ public:
         {
             sum += BYTE(sData[j]) & 0xFF;//只取字符低八位
         }
-        //if (sum == sSum)
-        if (sData.empty() && sum == 0) // 数据为空，校验和为0时可能是合法包
+        if (sum == sSum || (sData.empty() && sum == 0)) // 数据为空，校验和为0时可能是合法包
         {
             nSize = i;
             TRACE("[服务端 拆包] sHead=%d nLength=%d nCmd=%d data=[%s]  sSum=%d\r\n", sHead, nLength, sCmd, sData.c_str(), sSum);
@@ -142,16 +140,28 @@ public:
         return nLength + 2 + 4;
     }
 
-    const char* Data() {
-        strOut.resize(nLength + 2 + 4);
+    //将包转为字符串类型
+    const char* Data()
+    {
+        strOut.resize(nLength + 6);
         BYTE* pData = (BYTE*)strOut.c_str();
-        *(WORD*)pData = sHead; pData += 2;
-        *(DWORD*)pData = nLength; pData += 4;
-        *(WORD*)pData = sCmd; pData += 2;
-        memcpy(pData, sData.c_str(), sData.size()); pData += sData.size();
-        *(WORD*)pData = sSum;
+        *(WORD*)pData = sHead;
+        *(DWORD*)(pData + 2) = nLength;
+        *(WORD*)(pData + 2 + 4) = sCmd;
+        memcpy(pData + 2 + 4 + 2, sData.c_str(), sData.size());
+        *(WORD*)(pData + 2 + 4 + 2 + sData.size()) = sSum;
         return strOut.c_str();
     }
+    //const char* Data() {
+    //    strOut.resize(nLength + 2 + 4);
+    //    BYTE* pData = (BYTE*)strOut.c_str();
+    //    *(WORD*)pData = sHead; pData += 2;
+    //    *(DWORD*)pData = nLength; pData += 4;
+    //    *(WORD*)pData = sCmd; pData += 2;
+    //    memcpy(pData, sData.c_str(), sData.size()); pData += sData.size();
+    //    *(WORD*)pData = sSum;
+    //    return strOut.c_str();
+    //}
     ~CPacket() {}
 
 };
@@ -177,9 +187,10 @@ typedef struct file_info {
         HasNext = FALSE;
     }
     BOOL IsInvalid; // 是否是无效文件
-    char szFileName[256]; // 文件名
     BOOL IsDirectory; // 是否是目录
     BOOL HasNext; // 是否有下一个文件
+    char szFileName[256]; // 文件名
+
 }FILEINFO, * PFILEINFO;
 
 
@@ -256,15 +267,15 @@ public:
             }
             index += recv_len;
             recv_len = index;
-            m_packet =CPacket((BYTE*)buffer, recv_len);//recv_len传入：buffer数据长度   recv_len传出：成功解析数据长度
-            TRACE("[服务端] 收到包头：%d, 包长度：%d, 控制命令：%d, 内容：%s, 校验和：%d \n", m_packet.sHead, recv_len, m_packet.sCmd, m_packet.sData.c_str(), m_packet.sSum);
+            m_packet = CPacket((BYTE*)buffer, recv_len);//recv_len传入：buffer数据长度   recv_len传出：成功解析数据长度
+            TRACE("[服务端] 收到包头：%d, 包长度：%d, 控制命令：%d, 内容：%s, 校验和：%d \n", m_packet.sHead, m_packet.nLength, m_packet.sCmd, m_packet.sData.c_str(), m_packet.sSum);
 
             if (recv_len > 0) {
-                //memmove(buffer, buffer + recv_len, index - recv_len);
                 memmove(buffer, buffer + recv_len, BUFFER_SIZE - recv_len);
+                //memmove(buffer, buffer + recv_len, index - recv_len);
 
                 index -= recv_len;
-                delete[] buffer;
+                //delete[] buffer;
                 return m_packet.sCmd;
             }
         }
@@ -282,7 +293,7 @@ public:
         if (m_cli_sock == INVALID_SOCKET) {
             return false;
         }
-        Dump((BYTE*)packet.Data(),packet.Size());
+        Dump((BYTE*)packet.Data(), packet.Size());
 
         return send(m_cli_sock, packet.Data(), packet.Size(), 0) > 0;
     }

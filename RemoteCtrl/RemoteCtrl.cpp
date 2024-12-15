@@ -5,6 +5,8 @@
 #include "framework.h"
 #include "RemoteCtrl.h"
 #include "ServerSocket.h"
+
+#include <io.h>
 #include <direct.h>
 #include <atlimage.h>
 
@@ -25,8 +27,8 @@ using namespace std;
 void Dump(BYTE* pData, size_t nSize) {
     std::string strOut;
     for (size_t i = 0; i < nSize; i++) {
-        char buf[8] = { 0 };
-        if (i > 0 && i % 16 == 0) strOut += "\n";
+        char buf[8] = "";
+        if (i > 0 && (i % 16 == 0)) strOut += "\n";
         snprintf(buf, sizeof(buf), "%02X ", pData[i] & 0xFF);
         strOut += buf;
     }
@@ -57,7 +59,6 @@ int MakeDriverInfo() { // 1==> A盘, 2==>B盘, 3==>C盘...,26=>Z盘
 // 创建指定目录下的文件信息
 int MakeDirectoryInfo() {
     std::string strPath;
-    //std::list<FILEINFO> fileInfoLists;
     if (CServerSocket::getInstance()->GetFilePath(strPath) == false) {
         OutputDebugString(_T("无法获取文件路径"));
         return -1;
@@ -66,15 +67,14 @@ int MakeDirectoryInfo() {
         FILEINFO fileInfo;
         fileInfo.HasNext = FALSE;
         //memcpy(fileInfo.szFileName, strPath.c_str(), strPath.size());
-        //fileInfoLists.push_back(fileInfo);
         CPacket pack((WORD)2, (BYTE*)&fileInfo, (size_t)sizeof(fileInfo));
         CServerSocket::getInstance()->Send(pack);
         OutputDebugString(_T("没有权限访问目录"));
         return -2;
     }
     _finddata_t fdata;
-    int hfind = 0;
-    if ((hfind = _findfirst("*", &fdata)) == -1) {
+    int hfind = _findfirst("*", &fdata);
+    if (hfind == -1) {
         OutputDebugString(_T("无法找到文件"));
         FILEINFO fileInfo;
         fileInfo.HasNext = FALSE;
@@ -82,21 +82,33 @@ int MakeDirectoryInfo() {
         CServerSocket::getInstance()->Send(pack);
         return -3;
     }
-    do
-    {
-        FILEINFO fileInfo;
-        fileInfo.IsDirectory = (fdata.attrib & _A_SUBDIR) != 0;
-        memcpy(fileInfo.szFileName, fdata.name, strlen(fdata.name));
-        TRACE("[服务端] [MakeDirectoryInfo] [拿到的文件信息名：] %s\r\n", fileInfo.szFileName);
-        //fileInfoLists.push_back(fileInfo);
-        CPacket pack((WORD)2, (BYTE*)&fileInfo, (size_t)sizeof(fileInfo));
+    //挨个发送有效文件给客户端
+    do {
+        FILEINFO fInfo;
+        fInfo.IsDirectory = ((fdata.attrib & _A_SUBDIR) != 0);
+
+        // 确保字符串不会超出缓冲区
+        size_t fileNameLen = strlen(fdata.name);
+        if (fileNameLen >= sizeof(fInfo.szFileName)) {
+            OutputDebugString(_T("文件名太长，无法存储。\n"));
+            fileNameLen = sizeof(fInfo.szFileName) - 1; // 截断文件名
+        }
+
+        memcpy(fInfo.szFileName, fdata.name, fileNameLen);
+
+        TRACE("[服务端] [MakeDirectoryInfo] [拿到的文件信息名：] %s\r\n", fInfo.szFileName);
+
+        CPacket pack((WORD)2, (BYTE*)&fInfo, (size_t)sizeof(fInfo));
         CServerSocket::getInstance()->Send(pack);
-    } while (!_findnext(hfind, &fdata));
+    } while (!_findnext(hfind, &fdata)); //查找工作目录匹配的下一个文件
+
     // 发送信息到客户端
     FILEINFO fileInfo;
     fileInfo.HasNext = FALSE;
     CPacket pack((WORD)2, (BYTE*)&fileInfo, (size_t)sizeof(fileInfo));
     CServerSocket::getInstance()->Send(pack);
+
+    _findclose(hfind); // 关闭查找句柄
     return 0;
 }
 
@@ -405,7 +417,7 @@ int main()
                     Sleep(1000);
                     continue;
                 }
-                TRACE("[服务端] main 客户端连接成功\r\n");
+                TRACE("[服务端] [main] 客户端连接成功\r\n");
                 // 3. 处理客户端命令
                 int ret = pserver->DealCommand();
                 TRACE("[服务端] 服务器处理命令：%d\r\n", ret);

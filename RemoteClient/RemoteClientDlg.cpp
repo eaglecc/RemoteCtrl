@@ -201,7 +201,7 @@ void CRemoteClientDlg::OnBnClickedButtonFileinfo()
     int ret = SendCommandPacket(1);
     if (ret == -1)
     {
-        AfxMessageBox(_T("连接服务器失败"));
+        AfxMessageBox(_T("命令处理失败！"));
         return;
     }
     CClientSocket* pClient = CClientSocket::getInstance();
@@ -234,7 +234,7 @@ void CRemoteClientDlg::OnBnClickedButtonFileinfo()
 CString CRemoteClientDlg::GetPath(HTREEITEM hTree) {
     CString strRet, strTmp;
     do {
-        strTmp = m_Tree.GetItemText(hTree); // D:
+        strTmp = m_Tree.GetItemText(hTree);
         strRet = strTmp + "\\" + strRet;
         hTree = m_Tree.GetParentItem(hTree);
     } while (hTree != NULL);
@@ -268,6 +268,7 @@ void CRemoteClientDlg::LoadFileInfo()
     int nCmd = SendCommandPacket(2, false, (BYTE*)(LPCSTR)strPath, strPath.GetLength());
     if (nCmd < 0)
     {
+        AfxMessageBox(_T("命令处理失败！"));
         return;
     }
     PFILEINFO pInfo = (PFILEINFO)CClientSocket::getInstance()->GetPacket().sData.c_str();
@@ -308,11 +309,11 @@ void CRemoteClientDlg::OnNMDblclkTreeDir(NMHDR* pNMHDR, LRESULT* pResult)
     LoadFileInfo();
 }
 
-
+// 树控件单击
 void CRemoteClientDlg::OnNMClickTreeDir(NMHDR* pNMHDR, LRESULT* pResult)
 {
     *pResult = 0;
-    LoadFileInfo();
+    //LoadFileInfo();
 }
 
 // 列表控件右键，实现文件打开下载功能

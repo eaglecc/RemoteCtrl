@@ -58,7 +58,7 @@ public:
     }
 
     // 构造函数重载，从数据包中解析出各个字段 解析包  拆包
-    CPacket(const BYTE* pData, size_t& nSize)
+    CPacket(const BYTE* pData, size_t& nSize) : sHead(0), nLength(0), sCmd(0), sSum(0)
     {
         //包 [包头2 包长度4 控制命令2 包数据 和校验2]
         size_t i = 0;
@@ -105,10 +105,10 @@ public:
         {
             sum += BYTE(sData[j]) & 0xFF;//只取字符低八位
         }
-        //TRACE("[客户端] sHead=%d nLength=%d data=[%s]  sSum=%d  sum = %d\r\n", sHead, nLength, strData.c_str(), sSum, sum);
-        if (sum == sSum)
+        if (sum == sSum || (sData.empty() && sum == 0)) // 数据为空，校验和为0时可能是合法包
         {
             nSize = i;
+            TRACE("[服务端 拆包] sHead=%d nLength=%d nCmd=%d data=[%s]  sSum=%d\r\n", sHead, nLength, sCmd, sData.c_str(), sSum);
             return;
         }
         nSize = 0;
@@ -183,7 +183,7 @@ public:
 
     // 初始化服务器
     bool InitServer(int nIP, int port) {
-        if (m_sock!= INVALID_SOCKET) CloseSocket();
+        if (m_sock != INVALID_SOCKET) CloseSocket();
         m_sock = socket(PF_INET, SOCK_STREAM, 0);
         if (m_sock == INVALID_SOCKET) {
             return false;
@@ -213,20 +213,20 @@ public:
             return -1;
         }
         char* buffer = m_buffer.data();
-        memset(buffer, 0, BUFFER_SIZE);
         size_t index = 0;
         while (true) {
             size_t recv_len = recv(m_sock, buffer + index, BUFFER_SIZE - index, 0);
-            if (recv_len <= 0) {
+            TRACE("[客户端]len=%d buff=%s  buffSize=%d\r\n", recv_len, buffer, index + recv_len);
+            if ((int)recv_len <= 0) 
+            {
                 return -1;
             }
             index += recv_len;
             recv_len = index;
-            m_packet = CPacket((BYTE*)buffer, recv_len);
+            m_packet = CPacket((BYTE*)buffer, recv_len); //len传入：buffer数据长度   传出：已解析数据长度
             if (recv_len > 0) {
                 memmove(buffer, buffer + recv_len, BUFFER_SIZE - recv_len);
-                //memmove(buffer, buffer + recv_len, index - recv_len);
-
+                //memmove(buffer, buffer + recv_len, index - recv_len); //剩余解析数据移到缓冲区头部
                 index -= recv_len;
                 return m_packet.sCmd;
             }
@@ -239,7 +239,7 @@ public:
         if (m_sock == INVALID_SOCKET) {
             return false;
         }
-        return send(m_sock, (char*)pData, nSize, 0) > 0;
+        return send(m_sock, pData, nSize, 0) > 0;
     }
     bool Send(CPacket& packet) {
         if (m_sock == INVALID_SOCKET) {
@@ -278,13 +278,14 @@ private:
         m_sock = ss.m_sock;
     }
 
-    CClientSocket() {
+    CClientSocket(){
         m_sock = INVALID_SOCKET;
         if (InitSocketEnv() == FALSE) {
             MessageBox(NULL, _T("无法初始化Socket环境，请检查网络设置"), _T("Error"), MB_OK | MB_ICONERROR);
             exit(0);
         }
         m_buffer.resize(BUFFER_SIZE);
+        memset(m_buffer.data(), 0, BUFFER_SIZE);
     }
 
     ~CClientSocket() {
@@ -321,7 +322,11 @@ private:
     static CHelper m_helper;
     static CClientSocket* m_instance;
     SOCKET m_sock;
+
+    //数据包
     CPacket m_packet;
+
+    //缓冲区
     std::vector<char> m_buffer;
 };
 
