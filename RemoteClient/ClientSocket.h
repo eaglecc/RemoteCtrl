@@ -1,38 +1,18 @@
 #pragma once
-#include "framework.h"
-#include "pch.h"
-
-void Dump(BYTE* pData, size_t nSize);
+#include <string>
+#include <vector>
 
 #pragma pack(push)
 #pragma pack(1)
-//包类
-//作用：用在网络的数据传输
-//格式：[0xFEFF | 包长度 | 控制命令 | 数据 | 检验位]
-//长度：[2B     |    4B |       2B | data|     2B]
-//
-//设计：包长度 = 控制命令长度 + 数据长度 + 检验位长度
-//检验位 = 数据段每个字符的低八位的和
-//控制命令 = 代表此包进行的操作 例如 1查看分区 2查看文件 1981测试包
-//
-//接收方接收到包时，根据包头识别数据流中包的起始位置，根据控制命令进行相应的操作，根据检验位判断接收数据是否错误
+// 解析和处理数据包
 class CPacket {
 public:
-    WORD sHead; // 包头，固定位： 0xFEFF
-    DWORD nLength; // 包长度
-    WORD sCmd; // 控制命令
-    std::string sData; // 包数据
-    WORD sSum; // 和校验
-    std::string strOut; // 整个包的数据
-
-public:
     CPacket() :sHead(0), nLength(0), sCmd(0), sSum(0) {}
-
     //打包：封装成包
     CPacket(WORD nCmd, const BYTE* pData, size_t nSize)
     {
         sHead = 0xFEFF;
-        nLength = (nSize + 4); // 命令(2) + 数据(nSize) + 校验和(2)
+        nLength = nSize + 4; // 命令(2) + 数据(nSize) + 校验和(2)
         sCmd = nCmd;
 
         if (nSize > 0)//有数据段
@@ -52,9 +32,8 @@ public:
         {
             sSum += BYTE(sData[j]) & 0xFF;//只取字符低八位
         }
-        TRACE("[服务端 封包] sHead=%d nLength=%d nCmd=%d data=[%s]  sSum=%d\r\n", sHead, nLength, sCmd, sData.c_str(), sSum);
+        TRACE("[客户端 封包] sHead=%d nLength=%d nCmd=%d data=[%s]  sSum=%d\r\n", sHead, nLength, sCmd, sData.c_str(), sSum);
     }
-
 
     // 复制构造函数，用于拷贝数据包
     CPacket(const CPacket& packet) {
@@ -78,7 +57,7 @@ public:
         return *this;
     }
 
-    // 解析包  拆包
+    // 构造函数重载，从数据包中解析出各个字段 解析包  拆包
     CPacket(const BYTE* pData, size_t& nSize) : sHead(0), nLength(0), sCmd(0), sSum(0)
     {
         //包 [包头2 包长度4 控制命令2 包数据 和校验2]
@@ -116,7 +95,7 @@ public:
         {
             sData.resize(nLength - 2 - 2);//nLength - [控制命令位长度] - [校验位长度]
             memcpy((void*)sData.c_str(), pData + i, nLength - 4);
-            i = i + (nLength - 2 - 2);
+            i = i + nLength - 2 - 2;
         }
 
         //取出校验位 并校验 校验位：由数据段的每个字符的低八位的和组成校验位
@@ -136,12 +115,12 @@ public:
     }
 
     // 包数据大小
-    size_t Size() {
+    int Size() {
         return nLength + 2 + 4;
     }
 
     //将包转为字符串类型
-    const char* Data()
+    const char* CPacket::Data()
     {
         strOut.resize(nLength + 6);
         BYTE* pData = (BYTE*)strOut.c_str();
@@ -152,18 +131,15 @@ public:
         *(WORD*)(pData + 2 + 4 + 2 + sData.size()) = sSum;
         return strOut.c_str();
     }
-    //const char* Data() {
-    //    strOut.resize(nLength + 2 + 4);
-    //    BYTE* pData = (BYTE*)strOut.c_str();
-    //    *(WORD*)pData = sHead; pData += 2;
-    //    *(DWORD*)pData = nLength; pData += 4;
-    //    *(WORD*)pData = sCmd; pData += 2;
-    //    memcpy(pData, sData.c_str(), sData.size()); pData += sData.size();
-    //    *(WORD*)pData = sSum;
-    //    return strOut.c_str();
-    //}
-    ~CPacket() {}
 
+    ~CPacket() {}
+public:
+    WORD sHead; // 包头，固定位： 0xFEFF
+    DWORD nLength; // 包长度
+    WORD sCmd; // 控制命令
+    std::string sData; // 包数据
+    WORD sSum; // 和校验
+    std::string strOut; // 整个包的数据
 };
 #pragma pack(pop)
 
@@ -187,95 +163,71 @@ typedef struct file_info {
         HasNext = FALSE;
     }
     BOOL IsInvalid; // 是否是无效文件
+    char szFileName[256]; // 文件名
     BOOL IsDirectory; // 是否是目录
     BOOL HasNext; // 是否有下一个文件
-    char szFileName[256]; // 文件名
-
 }FILEINFO, * PFILEINFO;
 
 
-class CServerSocket
+std::string GetErrInfo(int wsaErrorCode);
+
+class CClientSocket
 {
 public:
-    static CServerSocket* getInstance() {
+    static CClientSocket* getInstance() {
         if (m_instance == NULL) { // 静态函数没有this指针，无法直接访问成员变量
-            m_instance = new CServerSocket();
+            m_instance = new CClientSocket();
         }
         return m_instance;
     }
 
     // 初始化服务器
-    bool InitServer() {
+    bool InitServer(int nIP, int port) {
+        if (m_sock != INVALID_SOCKET) CloseSocket();
+        m_sock = socket(PF_INET, SOCK_STREAM, 0);
         if (m_sock == INVALID_SOCKET) {
             return false;
         }
         sockaddr_in serv_addr;
         memset(&serv_addr, 0, sizeof(serv_addr));
         serv_addr.sin_family = AF_INET;
-        serv_addr.sin_addr.s_addr = htonl(INADDR_ANY);
-        serv_addr.sin_port = htons(9527);
-        if (bind(m_sock, (sockaddr*)&serv_addr, sizeof(serv_addr)) == SOCKET_ERROR) {
+        serv_addr.sin_addr.s_addr = htonl(nIP);
+        serv_addr.sin_port = htons(port);
+        if (serv_addr.sin_addr.s_addr == INADDR_NONE) {
+            AfxMessageBox(_T("IP地址错误"));
             return false;
         }
-        if (listen(m_sock, 1) == SOCKET_ERROR) {
+        int ret = connect(m_sock, (sockaddr*)&serv_addr, sizeof(serv_addr));
+        if (ret == SOCKET_ERROR) {
+            AfxMessageBox(_T("连接服务器失败"));
+            TRACE(_T("连接服务器失败，错误代码：%d，错误信息：%s\n"), WSAGetLastError(), GetErrInfo(WSAGetLastError()).c_str());
             return false;
         }
         return true;
     }
 
-    // 等待控制端连接
-    bool AcceptClient() {
-        TRACE("[服务端] Accept 等待控制端连接...\n");
-        if (m_sock == INVALID_SOCKET) {
-            TRACE("服务器套接字无效。\n");
-            return false;
-        }
-
-        sockaddr_in cli_addr;
-        memset(&cli_addr, 0, sizeof(cli_addr));
-        int cli_len = sizeof(cli_addr);
-        m_cli_sock = accept(m_sock, (sockaddr*)&cli_addr, &cli_len);
-
-        if (m_cli_sock == INVALID_SOCKET) {
-            TRACE("接受连接失败，错误码：%d\n", WSAGetLastError());
-            return false;
-        }
-
-        TRACE("收到了来自%s的连接请求\n   端口号：%d\n", inet_ntoa(cli_addr.sin_addr), ntohs(cli_addr.sin_port));
-        return true;
-    }
 #define BUFFER_SIZE 4096
-    // 处理客户端命令
+    // 处理控制端命令
     int DealCommand() {
-        if (m_cli_sock == INVALID_SOCKET) {
+        if (m_sock == INVALID_SOCKET) {
             return -1;
         }
-        TRACE("[服务端] DealCommand开始处理客户端 %d的命令\n", m_cli_sock);
-        char* buffer = new char[BUFFER_SIZE];
-        if (buffer == NULL) {
-            TRACE("内存分配失败。\n");
-            return -2;
-        }
-        memset(buffer, 0, BUFFER_SIZE);
+        char* buffer = m_buffer.data();
         size_t index = 0;
         while (true) {
-            size_t recv_len = recv(m_cli_sock, buffer + index, BUFFER_SIZE - index, 0);
-
-            if (recv_len <= 0) {
-                delete[] buffer;
+            size_t recv_len = recv(m_sock, buffer + index, BUFFER_SIZE - index, 0);
+            TRACE("[客户端]len=%d buff=%s  buffSize=%d\r\n", recv_len, buffer, index + recv_len);
+            if ((int)recv_len <= 0) 
+            {
                 return -1;
             }
             index += recv_len;
             recv_len = index;
-            m_packet = CPacket((BYTE*)buffer, recv_len);//recv_len传入：buffer数据长度   recv_len传出：成功解析数据长度
-            TRACE("[服务端] 收到包头：%d, 包长度：%d, 控制命令：%d, 内容：%s, 校验和：%d \n", m_packet.sHead, m_packet.nLength, m_packet.sCmd, m_packet.sData.c_str(), m_packet.sSum);
-
+            m_packet = CPacket((BYTE*)buffer, recv_len); //len传入：buffer数据长度   传出：已解析数据长度
             if (recv_len > 0) {
                 memmove(buffer, buffer + recv_len, BUFFER_SIZE - recv_len);
-                //memmove(buffer, buffer + recv_len, index - recv_len);
-
+                //memmove(buffer, buffer + recv_len, index - recv_len); //剩余解析数据移到缓冲区头部
                 index -= recv_len;
-                //delete[] buffer;
                 return m_packet.sCmd;
             }
         }
@@ -284,18 +236,17 @@ public:
 
     // 发送数据
     bool Send(const char* pData, int nSize) {
-        if (m_cli_sock == INVALID_SOCKET) {
+        if (m_sock == INVALID_SOCKET) {
             return false;
         }
-        return send(m_cli_sock, (char*)pData, nSize, 0) > 0;
+        return send(m_sock, pData, nSize, 0) > 0;
     }
     bool Send(CPacket& packet) {
-        if (m_cli_sock == INVALID_SOCKET) {
+        if (m_sock == INVALID_SOCKET) {
             return false;
         }
-        Dump((BYTE*)packet.Data(), packet.Size());
-
-        return send(m_cli_sock, packet.Data(), packet.Size(), 0) > 0;
+        TRACE(_T("[客户端] Client Send 客户端发送数据包的控制命令：%d\n"), packet.sCmd);
+        return send(m_sock, packet.Data(), packet.Size(), 0) > 0;
     }
     // 获取文件路径
     bool GetFilePath(std::string& filePath) {
@@ -312,35 +263,32 @@ public:
             return true;
         }
     }
-
     CPacket& GetPacket() {
         return m_packet;
     }
 
-    // 关闭客户端连接
-    void CloseClient() {
-        closesocket(m_cli_sock);
-        m_cli_sock = INVALID_SOCKET;
-    }
-private:
-    CServerSocket& operator=(const CServerSocket&) {}
-    CServerSocket(const CServerSocket& ss) {
-        m_sock = ss.m_sock;
-        m_cli_sock = ss.m_cli_sock;
+    void CloseSocket() {
+        closesocket(m_sock);
+        m_sock = INVALID_SOCKET;
     }
 
-    CServerSocket() {
+private:
+    CClientSocket& operator=(const CClientSocket&) {}
+    CClientSocket(const CClientSocket& ss) {
+        m_sock = ss.m_sock;
+    }
+
+    CClientSocket(){
         m_sock = INVALID_SOCKET;
-        m_cli_sock = INVALID_SOCKET;
         if (InitSocketEnv() == FALSE) {
             MessageBox(NULL, _T("无法初始化Socket环境，请检查网络设置"), _T("Error"), MB_OK | MB_ICONERROR);
             exit(0);
         }
-        m_sock = socket(PF_INET, SOCK_STREAM, 0);
-        TRACE("服务器套接字：%d\n", m_sock);
+        m_buffer.resize(BUFFER_SIZE);
+        memset(m_buffer.data(), 0, BUFFER_SIZE);
     }
 
-    ~CServerSocket() {
+    ~CClientSocket() {
         closesocket(m_sock);
         WSACleanup();
     }
@@ -364,16 +312,22 @@ private:
     class CHelper {
     public:
         CHelper() {
-            CServerSocket::getInstance();
+            CClientSocket::getInstance();
         }
         ~CHelper() {
-            CServerSocket::releaseInstance();
+            CClientSocket::releaseInstance();
         }
     };
 
     static CHelper m_helper;
-    static CServerSocket* m_instance;
+    static CClientSocket* m_instance;
     SOCKET m_sock;
-    SOCKET m_cli_sock;
+
+    //数据包
     CPacket m_packet;
+
+    //缓冲区
+    std::vector<char> m_buffer;
 };
+
+extern CClientSocket server;
