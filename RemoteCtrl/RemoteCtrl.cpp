@@ -6,7 +6,6 @@
 #include "RemoteCtrl.h"
 #include "ServerSocket.h"
 
-#include <io.h>
 #include <direct.h>
 #include <atlimage.h>
 
@@ -63,51 +62,50 @@ int MakeDirectoryInfo() {
         OutputDebugString(_T("无法获取文件路径"));
         return -1;
     }
-    if (_chdir(strPath.c_str()) != 0) { // 将当前进程的工作目录更改为 strPath 指定的路径
-        FILEINFO fileInfo;
-        fileInfo.HasNext = FALSE;
-        //memcpy(fileInfo.szFileName, strPath.c_str(), strPath.size());
-        CPacket pack((WORD)2, (BYTE*)&fileInfo, (size_t)sizeof(fileInfo));
-        CServerSocket::getInstance()->Send(pack);
-        OutputDebugString(_T("没有权限访问目录"));
+    //设置为当前工作目录
+    if (!SetCurrentDirectoryA(strPath.c_str()))
+    {
+        //设置失败
+        FILEINFO finfo;
+        finfo.HasNext = FALSE;//没有后续文件
+        CPacket pack(2, (BYTE*)&finfo, sizeof(finfo));//打包
+        CServerSocket::getInstance()->Send(pack);//发送
+        OutputDebugString(TEXT("没有权限访问目录"));
         return -2;
     }
+    //设置当前工作目录成功
     _finddata_t fdata;
-    int hfind = _findfirst("*", &fdata);
+    int hfind = _findfirst("*", &fdata); //找工作目录中匹配的第一个文件  第一个参数使用通配符代表文件类型
     if (hfind == -1) {
-        OutputDebugString(_T("无法找到文件"));
+        OutputDebugString(_T("没有找到任何文件"));
         FILEINFO fileInfo;
         fileInfo.HasNext = FALSE;
         CPacket pack((WORD)2, (BYTE*)&fileInfo, (size_t)sizeof(fileInfo));
         CServerSocket::getInstance()->Send(pack);
         return -3;
     }
+
+    int Count = 0;
     //挨个发送有效文件给客户端
     do {
-        FILEINFO fInfo;
-        fInfo.IsDirectory = ((fdata.attrib & _A_SUBDIR) != 0);
-
-        // 确保字符串不会超出缓冲区
-        size_t fileNameLen = strlen(fdata.name);
-        if (fileNameLen >= sizeof(fInfo.szFileName)) {
-            OutputDebugString(_T("文件名太长，无法存储。\n"));
-            fileNameLen = sizeof(fInfo.szFileName) - 1; // 截断文件名
-        }
-
-        memcpy(fInfo.szFileName, fdata.name, fileNameLen);
-
-        TRACE("[服务端] [MakeDirectoryInfo] [拿到的文件信息名：] %s\r\n", fInfo.szFileName);
-
-        CPacket pack((WORD)2, (BYTE*)&fInfo, (size_t)sizeof(fInfo));
-        CServerSocket::getInstance()->Send(pack);
+        FILEINFO finfo;
+        finfo.IsDirectory = ((fdata.attrib & _A_SUBDIR) != 0);
+        memcpy(finfo.szFileName, fdata.name, strlen(fdata.name));
+        CPacket pack(2, (BYTE*)&finfo, sizeof(finfo));//打包
+        CServerSocket::getInstance()->Send(pack);//发送
+        Count++;
+        TRACE("[服务端] [MakeDirectoryInfo] [拿到的文件信息名：] %s\r\n", finfo.szFileName);
+        TRACE("[服务器数据包：]\r\n");
+        Dump((BYTE*)pack.Data(), pack.Size());
     } while (!_findnext(hfind, &fdata)); //查找工作目录匹配的下一个文件
 
     // 发送信息到客户端
     FILEINFO fileInfo;
     fileInfo.HasNext = FALSE;
-    CPacket pack((WORD)2, (BYTE*)&fileInfo, (size_t)sizeof(fileInfo));
+    CPacket pack(2, (BYTE*)&fileInfo, sizeof(fileInfo));
     CServerSocket::getInstance()->Send(pack);
 
+    TRACE("Count=%d\r\n", Count);
     _findclose(hfind); // 关闭查找句柄
     return 0;
 }
@@ -138,6 +136,7 @@ int downloadFile() {
         fseek(pFile, 0, SEEK_END);
         data = _ftelli64(pFile); // 整个文件的大小
         CPacket head(4, (BYTE*)&data, 8);
+        CServerSocket::getInstance()->Send(head);
         fseek(pFile, 0, SEEK_SET);
 
         char buffer[1024] = { 0 };

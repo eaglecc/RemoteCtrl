@@ -1,4 +1,7 @@
 #pragma once
+
+#include "pch.h"
+#include "framework.h"
 #include <string>
 #include <vector>
 
@@ -160,7 +163,7 @@ typedef struct file_info {
         IsInvalid = FALSE;
         memset(szFileName, 0, sizeof(szFileName));
         IsDirectory = -1;
-        HasNext = FALSE;
+        HasNext = TRUE;
     }
     BOOL IsInvalid; // 是否是无效文件
     char szFileName[256]; // 文件名
@@ -208,26 +211,47 @@ public:
 
 #define BUFFER_SIZE 4096
     // 处理控制端命令
+    //int DealCommand() {
+    //    if (m_sock == INVALID_SOCKET) {
+    //        return -1;
+    //    }
+    //    char* buffer = m_buffer.data();
+    //    size_t index = 0;
+    //    while (true) {
+    //        size_t recv_len = recv(m_sock, buffer + index, BUFFER_SIZE - index, 0);
+    //        TRACE("[客户端]len=%d buff=%s  buffSize=%d\r\n", recv_len, buffer, index + recv_len);
+    //        if ((int)recv_len <= 0) 
+    //        {
+    //            return -1;
+    //        }
+    //        index += recv_len;
+    //        recv_len = index;
+    //        m_packet = CPacket((BYTE*)buffer, recv_len); //len传入：buffer数据长度   传出：已解析数据长度
+    //        if (recv_len > 0) {
+    //            memmove(buffer, buffer + recv_len, BUFFER_SIZE - recv_len);
+    //            //memmove(buffer, buffer + recv_len, index - recv_len); //剩余解析数据移到缓冲区头部
+    //            index -= recv_len;
+    //            return m_packet.sCmd;
+    //        }
+    //    }
+    //    return -1;
+    //}
     int DealCommand() {
-        if (m_sock == INVALID_SOCKET) {
-            return -1;
-        }
+        if (m_sock == -1) return -1;
         char* buffer = m_buffer.data();
-        size_t index = 0;
+
+        static size_t index = 0;// 接收文件时会多次调用DealCommand函数，但用的是同一个缓冲区
         while (true) {
-            size_t recv_len = recv(m_sock, buffer + index, BUFFER_SIZE - index, 0);
-            TRACE("[客户端]len=%d buff=%s  buffSize=%d\r\n", recv_len, buffer, index + recv_len);
-            if ((int)recv_len <= 0) 
-            {
-                return -1;
-            }
-            index += recv_len;
-            recv_len = index;
-            m_packet = CPacket((BYTE*)buffer, recv_len); //len传入：buffer数据长度   传出：已解析数据长度
-            if (recv_len > 0) {
-                memmove(buffer, buffer + recv_len, BUFFER_SIZE - recv_len);
-                //memmove(buffer, buffer + recv_len, index - recv_len); //剩余解析数据移到缓冲区头部
-                index -= recv_len;
+            size_t len = recv(m_sock, buffer + index, BUFFER_SIZE - index, 0);
+            if (len <= 0 && index == 0) return -1;
+
+            index += len;
+            len = index;
+            m_packet = CPacket((BYTE*)buffer, len);
+
+            if (len > 0) {
+                memmove(buffer, buffer + len, index - len);// 从包头部分开始移动到最前面，去除掉无意义的数据
+                index -= len;
                 return m_packet.sCmd;
             }
         }
