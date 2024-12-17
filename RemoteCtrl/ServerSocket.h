@@ -182,9 +182,9 @@ typedef struct MouseEvent {
 typedef struct file_info {
     file_info() {
         IsInvalid = FALSE;
-        memset(szFileName, 0, sizeof(szFileName));
         IsDirectory = -1;
         HasNext = TRUE;
+        memset(szFileName, 0, sizeof(szFileName));
     }
     BOOL IsInvalid; // 是否是无效文件
     BOOL IsDirectory; // 是否是目录
@@ -246,78 +246,39 @@ public:
     }
 #define BUFFER_SIZE 4096
     // 处理客户端命令
-    //int DealCommand() {
-    //    if (m_cli_sock == INVALID_SOCKET) {
-    //        return -1;
-    //    }
-    //    TRACE("[服务端] DealCommand开始处理客户端 %d的命令\n", m_cli_sock);
-    //    char* buffer = new char[BUFFER_SIZE];
-    //    if (buffer == NULL) {
-    //        TRACE("内存分配失败。\n");
-    //        return -2;
-    //    }
-    //    memset(buffer, 0, BUFFER_SIZE);
-    //    size_t index = 0;
-    //    while (true) {
-    //        size_t recv_len = recv(m_cli_sock, buffer + index, BUFFER_SIZE - index, 0);
-
-    //        if (recv_len <= 0) {
-    //            delete[] buffer;
-    //            return -1;
-    //        }
-    //        index += recv_len;
-    //        recv_len = index;
-    //        m_packet = CPacket((BYTE*)buffer, recv_len);//recv_len传入：buffer数据长度   recv_len传出：成功解析数据长度
-    //        TRACE("[服务端] 收到包头：%d, 包长度：%d, 控制命令：%d, 内容：%s, 校验和：%d \n", m_packet.sHead, m_packet.nLength, m_packet.sCmd, m_packet.sData.c_str(), m_packet.sSum);
-
-    //        if (recv_len > 0) {
-    //            memmove(buffer, buffer + recv_len, BUFFER_SIZE - recv_len);
-    //            //memmove(buffer, buffer + recv_len, index - recv_len);
-
-    //            index -= recv_len;
-    //            //delete[] buffer;
-    //            return m_packet.sCmd;
-    //        }
-    //    }
-    //    return -1;
-    //}
     int DealCommand() {
-        if (m_cli_sock == -1) return -1;
-
-        char* buffer = new char[BUFFER_SIZE];
-        if (buffer == NULL) {
-            TRACE("内存不足！\r\n");
+        if (m_cli_sock == INVALID_SOCKET) {
             return -1;
         }
+        TRACE("[服务端] DealCommand开始处理客户端 %d的命令\n", m_cli_sock);
+        char* buffer = new char[BUFFER_SIZE];
+        if (buffer == NULL) {
+            TRACE("内存分配失败。\n");
+            return -2;
+        }
         memset(buffer, 0, BUFFER_SIZE);
-
-        size_t index = 0;
+        static size_t index = 0;
         while (true) {
-            if (index >= BUFFER_SIZE) {
-                // 检查 index 是否超出 BUFFER_SIZE，防止指针越界
-                TRACE("Index exceeds buffer size, terminating recv loop\r\n");
+            size_t recv_len = recv(m_cli_sock, buffer + index, BUFFER_SIZE - index, 0);
+
+            if (recv_len <= 0) {
                 delete[] buffer;
                 return -1;
             }
+            index += recv_len;
+            recv_len = index;
+            m_packet = CPacket((BYTE*)buffer, recv_len);//recv_len传入：buffer数据长度   recv_len传出：成功解析数据长度
+            TRACE("[服务端] 收到包头：%d, 包长度：%d, 控制命令：%d, 内容：%s, 校验和：%d \n", m_packet.sHead, m_packet.nLength, m_packet.sCmd, m_packet.sData.c_str(), m_packet.sSum);
 
-            size_t len = recv(m_cli_sock, buffer + index, BUFFER_SIZE - index, 0);
-            //TRACE("Server recv len = %d\r\n", len);
-            if (len <= 0) {
-                delete[]buffer;
-                return -1;
-            }
+            if (recv_len > 0) {
+                memmove(buffer, buffer + recv_len, BUFFER_SIZE - recv_len);
+                //memmove(buffer, buffer + recv_len, index - recv_len);
 
-            index += len;
-            m_packet = CPacket((BYTE*)buffer, index);
-
-            if (len > 0) {
-                memmove(buffer, buffer + len, BUFFER_SIZE - len);// 从包头部分开始移动到最前面，去除掉无意义的数据
-                len = 0;
-                delete[]buffer;
+                index -= recv_len;
+                //delete[] buffer;
                 return m_packet.sCmd;
             }
         }
-        delete[]buffer;
         return -1;
     }
 

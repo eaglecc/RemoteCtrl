@@ -266,23 +266,23 @@ void CRemoteClientDlg::LoadFileInfo()
     if (hTreeSelected == NULL) return;
     if (m_Tree.GetChildItem(hTreeSelected) == NULL) return; // 文件节点，直接返回
 
-    //先删除孩子节点防止重复点击
-    DeleteTreeChilrenItem(hTreeSelected);
-    //清空文件列表
-    m_List.DeleteAllItems();
-
     CString strPath = GetPath(hTreeSelected);
+    // 发送路径信息给服务端
     int nCmd = SendCommandPacket(2, false, (BYTE*)(LPCSTR)strPath, strPath.GetLength());
     if (nCmd < 0)
     {
         AfxMessageBox(_T("命令处理失败！"));
         return;
     }
+    //先删除孩子节点防止重复点击
+    DeleteTreeChilrenItem(hTreeSelected);
+    //清空文件列表
+    m_List.DeleteAllItems();
 
     CClientSocket* pClient = CClientSocket::getInstance();
     PFILEINFO pInfo = (PFILEINFO)pClient->GetPacket().sData.c_str();
 
-    while (pInfo->HasNext) {
+    while (pInfo->HasNext == FALSE) {
         TRACE("[客户端] [CRemoteClientDlg::OnNMDblclkTreeDir] 文件名:%s，是否是文件:%s\r\n", pInfo->szFileName, pInfo->IsDirectory);
         if (pInfo->IsDirectory) {
             if (CString(pInfo->szFileName) == "." || CString(pInfo->szFileName) == "..") {

@@ -36,7 +36,7 @@ void Dump(BYTE* pData, size_t nSize) {
 }
 
 // 创建磁盘分区信息
-int MakeDriverInfo() { // 1==> A盘, 2==>B盘, 3==>C盘...,26=>Z盘
+int MakeDriverInfo() { // 1==> A盘, 2==>B��, 3==>C盘...,26=>Z盘
     std::string result;
     for (int i = 1; i <= 26; i++) {
         if (_chdrive(i) == 0) {
@@ -75,7 +75,11 @@ int MakeDirectoryInfo() {
     }
     //设置当前工作目录成功
     _finddata_t fdata;
-    int hfind = _findfirst("*", &fdata); //找工作目录中匹配的第一个文件  第一个参数使用通配符代表文件类型
+
+    std::string searchPath = strPath + "*";
+    int hfind = _findfirst(searchPath.c_str(), &fdata);
+
+    //int hfind = _findfirst("*", &fdata); //找工作目录中匹配的第一个文件  第一个参数使用通配符代表文件类型
     if (hfind == -1) {
         OutputDebugString(_T("没有找到任何文件"));
         FILEINFO fileInfo;
@@ -90,14 +94,18 @@ int MakeDirectoryInfo() {
     do {
         FILEINFO finfo;
         finfo.IsDirectory = ((fdata.attrib & _A_SUBDIR) != 0);
-        memcpy(finfo.szFileName, fdata.name, strlen(fdata.name));
+        //memcpy(finfo.szFileName, fdata.name, strlen(fdata.name));
+        strncpy(finfo.szFileName, fdata.name, sizeof(finfo.szFileName) - 1);
+        finfo.szFileName[sizeof(finfo.szFileName) - 1] = '\0';
+        TRACE("[服务端] finfo.szFileName: %s , fdata.name: %s \r\n", finfo.szFileName, fdata.name);
         CPacket pack(2, (BYTE*)&finfo, sizeof(finfo));//打包
         CServerSocket::getInstance()->Send(pack);//发送
         Count++;
         TRACE("[服务端] [MakeDirectoryInfo] [拿到的文件信息名：] %s\r\n", finfo.szFileName);
         TRACE("[服务器数据包：]\r\n");
         Dump((BYTE*)pack.Data(), pack.Size());
-    } while (!_findnext(hfind, &fdata)); //查找工作目录匹配的下一个文件
+    } while (_findnext(hfind, &fdata) == 0); 
+    //while (!_findnext(hfind, &fdata)); //查找工作目录匹配的下一个文件
 
     // 发送信息到客户端
     FILEINFO fileInfo;
