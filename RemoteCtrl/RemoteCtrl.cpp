@@ -74,12 +74,12 @@ int MakeDirectoryInfo() {
         return -2;
     }
     //设置当前工作目录成功
-    _finddata_t fdata;
+    struct _finddata_t fdata;
 
     std::string searchPath = strPath + "*";
-    int hfind = _findfirst(searchPath.c_str(), &fdata);
+    long long hfind = _findfirst(searchPath.c_str(), &fdata);
 
-    //int hfind = _findfirst("*", &fdata); //找工作目录中匹配的第一个文件  第一个参数使用通配符代表文件类型
+    //long long hfind = _findfirst("*", &fdata); //找工作目录中匹配的第一个文件  第一个参数使用通配符代表文件类型
     if (hfind == -1) {
         OutputDebugString(_T("没有找到任何文件"));
         FILEINFO fileInfo;
