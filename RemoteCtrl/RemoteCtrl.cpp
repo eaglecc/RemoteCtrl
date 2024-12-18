@@ -94,9 +94,9 @@ int MakeDirectoryInfo() {
     do {
         FILEINFO finfo;
         finfo.IsDirectory = ((fdata.attrib & _A_SUBDIR) != 0);
-        //memcpy(finfo.szFileName, fdata.name, strlen(fdata.name));
-        strncpy(finfo.szFileName, fdata.name, sizeof(finfo.szFileName) - 1);
-        finfo.szFileName[sizeof(finfo.szFileName) - 1] = '\0';
+        memcpy(finfo.szFileName, fdata.name, strlen(fdata.name));
+        //strncpy(finfo.szFileName, fdata.name, sizeof(finfo.szFileName) - 1);
+        //finfo.szFileName[sizeof(finfo.szFileName) - 1] = '\0';
         TRACE("[服务端] finfo.szFileName: %s , fdata.name: %s \r\n", finfo.szFileName, fdata.name);
         CPacket pack(2, (BYTE*)&finfo, sizeof(finfo));//打包
         CServerSocket::getInstance()->Send(pack);//发送

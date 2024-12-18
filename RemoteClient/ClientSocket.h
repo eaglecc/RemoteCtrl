@@ -158,19 +158,20 @@ typedef struct MouseEvent {
     POINT ptXY; // 坐标
 }MOUSEEV, * PMOUSEEV;
 
+// 坑点：这个结构体必须和服务器端一致，不然会导致数据包解析失败
 typedef struct file_info {
     file_info() {
         IsInvalid = FALSE;
-        memset(szFileName, 0, sizeof(szFileName));
         IsDirectory = -1;
         HasNext = TRUE;
+        memset(szFileName, 0, sizeof(szFileName));
     }
     BOOL IsInvalid; // 是否是无效文件
-    char szFileName[256]; // 文件名
     BOOL IsDirectory; // 是否是目录
     BOOL HasNext; // 是否有下一个文件
-}FILEINFO, * PFILEINFO;
+    char szFileName[256]; // 文件名
 
+}FILEINFO, * PFILEINFO;
 
 std::string GetErrInfo(int wsaErrorCode);
 

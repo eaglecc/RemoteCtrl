@@ -263,10 +263,16 @@ void CRemoteClientDlg::LoadFileInfo()
 
     //获得鼠标点击坐标对应的树节点句柄
     HTREEITEM hTreeSelected = m_Tree.HitTest(ptMouse, 0);
-    if (hTreeSelected == NULL) return;
-    if (m_Tree.GetChildItem(hTreeSelected) == NULL) return; // 文件节点，直接返回
+    if (hTreeSelected == NULL)return;
+    if (m_Tree.GetChildItem(hTreeSelected) == NULL)return; // 文件节点，直接返回
+
+    //先删除孩子节点防止重复点击
+    DeleteTreeChilrenItem(hTreeSelected);
+    //清空文件列表
+    m_List.DeleteAllItems();
 
     CString strPath = GetPath(hTreeSelected);
+    TRACE("path=%s\r\n", strPath);
     // 发送路径信息给服务端
     int nCmd = SendCommandPacket(2, false, (BYTE*)(LPCSTR)strPath, strPath.GetLength());
     if (nCmd < 0)
@@ -274,16 +280,12 @@ void CRemoteClientDlg::LoadFileInfo()
         AfxMessageBox(_T("命令处理失败！"));
         return;
     }
-    //先删除孩子节点防止重复点击
-    DeleteTreeChilrenItem(hTreeSelected);
-    //清空文件列表
-    m_List.DeleteAllItems();
 
     CClientSocket* pClient = CClientSocket::getInstance();
     PFILEINFO pInfo = (PFILEINFO)pClient->GetPacket().sData.c_str();
 
-    while (pInfo->HasNext == FALSE) {
-        TRACE("[客户端] [CRemoteClientDlg::OnNMDblclkTreeDir] 文件名:%s，是否是文件:%s\r\n", pInfo->szFileName, pInfo->IsDirectory);
+    while (pInfo->HasNext) {
+        TRACE("[客户端] [CRemoteClientDlg::OnNMDblclkTreeDir] 文件名:%s，是否是文件:%d\r\n", pInfo->szFileName, pInfo->IsDirectory);
         if (pInfo->IsDirectory) {
             if (CString(pInfo->szFileName) == "." || CString(pInfo->szFileName) == "..") {
                 int cmd = pClient->DealCommand();
@@ -320,7 +322,7 @@ void CRemoteClientDlg::OnNMDblclkTreeDir(NMHDR* pNMHDR, LRESULT* pResult)
 void CRemoteClientDlg::OnNMClickTreeDir(NMHDR* pNMHDR, LRESULT* pResult)
 {
     *pResult = 0;
-    //LoadFileInfo();
+    LoadFileInfo();
 }
 
 // 列表控件右键，实现文件打开下载功能
