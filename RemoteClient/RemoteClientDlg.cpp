@@ -208,29 +208,20 @@ void CRemoteClientDlg::OnBnClickedButtonFileinfo()
         return;
     }
     CClientSocket* pClient = CClientSocket::getInstance();
-    std::string drivers = pClient->GetPacket().sData;
+    std::string drivers = pClient->GetPacket().sData; //"C,D,E"
     m_Tree.DeleteAllItems();
     std::string dr;
-
-    for (size_t i = 0; i < drivers.size(); i++)
+    for (size_t i = 0; i < drivers.size() + 1; i++)
     {
-        if (drivers[i] == ',') {
-            if (!dr.empty()) {
-                dr += ":";
-                HTREEITEM hTmp = m_Tree.InsertItem(CString(dr.c_str()), TVI_ROOT, TVI_LAST);
-                m_Tree.InsertItem(NULL, hTmp, TVI_LAST);
-                dr.clear();
-            }
+        if (drivers[i] == ',' || i == (drivers.size()))
+        {
+            dr += ":";
+            HTREEITEM hTmp = m_Tree.InsertItem(dr.c_str(), TVI_ROOT, TVI_LAST);
+            m_Tree.InsertItem("", hTmp, TVI_LAST);//目录插入一个空项
+            dr.clear();
+            continue;
         }
-        else {
-            dr += drivers[i]; // Accumulate characters for the drive letter
-        }
-    }
-
-    // Handle the last drive letter if there is no trailing comma
-    if (!dr.empty()) {
-        dr += ":";
-        m_Tree.InsertItem(CString(dr.c_str()), TVI_ROOT, TVI_LAST);
+        dr += drivers[i];
     }
 }
 
@@ -299,7 +290,7 @@ void CRemoteClientDlg::LoadFileInfo()
 
         }
         else {
-            m_List.InsertColumn(0, pInfo->szFileName);
+            m_List.InsertItem(0, pInfo->szFileName);
         }
 
         int cmd = pClient->DealCommand();
