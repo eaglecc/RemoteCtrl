@@ -216,7 +216,7 @@ public:
         if (m_sock == -1) return -1;
         char* buffer = m_buffer.data();
 
-        static size_t index = 0;// 接收文件时会多次调用DealCommand函数，但用的是同一个缓冲区
+        static size_t index = 0;// index 是一个静态变量，用于跟踪缓冲区中未处理数据的起始位置
         while (true) {
             size_t len = recv(m_sock, buffer + index, BUFFER_SIZE - index, 0);
             if (len <= 0 && index <= 0) return -1;

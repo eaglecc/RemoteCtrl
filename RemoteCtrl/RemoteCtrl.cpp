@@ -104,7 +104,7 @@ int MakeDirectoryInfo() {
         TRACE("[服务端] [MakeDirectoryInfo] [拿到的文件信息名：] %s\r\n", finfo.szFileName);
         TRACE("[服务器数据包：]\r\n");
         Dump((BYTE*)pack.Data(), pack.Size());
-    } while (_findnext(hfind, &fdata) == 0); 
+    } while (_findnext(hfind, &fdata) == 0);
     //while (!_findnext(hfind, &fdata)); //查找工作目录匹配的下一个文件
 
     // 发送信息到客户端
@@ -141,11 +141,12 @@ int downloadFile() {
         return -1;
     }
     if (pFile != NULL) {
+        // 首先将文件指针移动到文件末尾，获取文件大小并发送给客户端。
         fseek(pFile, 0, SEEK_END);
         data = _ftelli64(pFile); // 整个文件的大小
         CPacket head(4, (BYTE*)&data, 8);
         CServerSocket::getInstance()->Send(head);
-        fseek(pFile, 0, SEEK_SET);
+        fseek(pFile, 0, SEEK_SET);// 将文件指针移动到文件开头
 
         char buffer[1024] = { 0 };
         size_t rLen = 0;
@@ -342,6 +343,21 @@ int UnmLockMachine() {
     return 0;
 }
 
+// 删除文件
+int DeleteLocalFile() {
+    std::string strPath;
+    CServerSocket::getInstance()->GetFilePath(strPath);
+    TCHAR sPath[MAX_PATH] = _T("");
+    //mbstowcs(sPath, strPath.c_str(), strPath.size()); // 多字节转宽字节 中文容易乱码
+    MultiByteToWideChar(CP_ACP, 0, strPath.c_str(), strPath.size(),
+        sPath, sizeof(sPath) / sizeof(TCHAR));
+    DeleteFileA(strPath.c_str());
+    CPacket pack(9, NULL, 0);
+    bool ret = CServerSocket::getInstance()->Send(pack);
+
+    return 0;
+}
+
 // 连接测试
 int TestConnect() {
     CPacket pack(2000, NULL, 0);
@@ -377,6 +393,9 @@ int ExcuteCommand(int nCmd) {
         break;
     case 8: // 解锁
         ret = UnmLockMachine();
+        break;
+    case 9: // 删除文件
+        ret = DeleteLocalFile();
         break;
     case 2000: // 连接测试
         ret = TestConnect();
