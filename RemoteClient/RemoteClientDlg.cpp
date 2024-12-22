@@ -124,6 +124,7 @@ BOOL CRemoteClientDlg::OnInitDialog()
     m_statusDlg.Create(IDD_DIALOG_STATUS);
     m_statusDlg.ShowWindow(SW_HIDE);
 
+    m_isFull = false;
     return TRUE;  // 除非将焦点设置到控件，否则返回 TRUE
 }
 
@@ -247,6 +248,42 @@ void CRemoteClientDlg::DeleteTreeChilrenItem(HTREEITEM hTree)
         hSub = m_Tree.GetChildItem(hTree);
         if (hSub != NULL) m_Tree.DeleteItem(hSub);
     } while (hSub != NULL);
+}
+
+// 监控数据线程入口函数
+void CRemoteClientDlg::threadEntryForWatchData(void* arg)
+{
+    CRemoteClientDlg* th = (CRemoteClientDlg*)arg;
+    th->threadWathData();
+    _endthread();
+}
+
+// 监控服务端屏幕
+void CRemoteClientDlg::threadWathData()
+{
+    CClientSocket* pClient = NULL;
+    do {
+        pClient = CClientSocket::getInstance();
+    } while (pClient == NULL);
+    for (;;) { // 等价于 while(true)
+        CPacket pack(6, NULL, 0);
+        bool ret = pClient->Send(pack);
+        if (ret)
+        {
+            int cmd = pClient->DealCommand();
+            if (cmd == 6) {
+                if (m_isFull == false) {
+                    BYTE* pData = (BYTE*)pClient->GetPacket().sData.c_str();
+                    // TODO ：存入CImage
+                    m_isFull = true;
+                }
+            }
+        }
+        else
+        {
+            Sleep(1);
+        }
+    }
 }
 
 // 下载文件线程入口函数
