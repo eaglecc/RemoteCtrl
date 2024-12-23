@@ -244,7 +244,7 @@ public:
         TRACE("收到了来自%s的连接请求\n   端口号：%d\n", inet_ntoa(cli_addr.sin_addr), ntohs(cli_addr.sin_port));
         return true;
     }
-#define BUFFER_SIZE 4096
+#define BUFFER_SIZE 8192
     // 处理客户端命令
     int DealCommand() {
         if (m_cli_sock == INVALID_SOCKET) {
@@ -295,7 +295,7 @@ public:
         if (m_cli_sock == INVALID_SOCKET) {
             return false;
         }
-        Dump((BYTE*)packet.Data(), packet.Size());
+        //Dump((BYTE*)packet.Data(), packet.Size());
         // 检查数据和长度
         int dataSize = packet.Size();
         const char* data = packet.Data();
