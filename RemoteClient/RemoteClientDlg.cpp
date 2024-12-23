@@ -11,6 +11,7 @@
 #ifdef _DEBUG
 #define new DEBUG_NEW
 #endif
+#include "WatchDialog.h"
 
 
 // 用于应用程序“关于”菜单项的 CAboutDlg 对话框
@@ -81,6 +82,7 @@ BEGIN_MESSAGE_MAP(CRemoteClientDlg, CDialogEx)
     ON_COMMAND(ID_DELETE_FILE, &CRemoteClientDlg::OnDeleteFile)
     ON_COMMAND(ID_RUN_FILE, &CRemoteClientDlg::OnRunFile)
     ON_MESSAGE(WM_SEND_PACKET, &CRemoteClientDlg::onSendPacket)
+    ON_BN_CLICKED(IDC_BTN_START_WATCH, &CRemoteClientDlg::OnBnClickedBtnStartWatch)
 END_MESSAGE_MAP()
 
 
@@ -265,7 +267,7 @@ void CRemoteClientDlg::threadWathData()
     do {
         pClient = CClientSocket::getInstance();
     } while (pClient == NULL);
-    for (;;) { // 等价于 while(true)
+    for (;;) { // 循环接收数据
         CPacket pack(6, NULL, 0);
         bool ret = pClient->Send(pack);
         if (ret)
@@ -274,8 +276,23 @@ void CRemoteClientDlg::threadWathData()
             if (cmd == 6) {
                 if (m_isFull == false) {
                     BYTE* pData = (BYTE*)pClient->GetPacket().sData.c_str();
-                    // TODO ：存入CImage
-                    m_isFull = true;
+                    HGLOBAL hMem = GlobalAlloc(GMEM_MOVEABLE, 0); // 申请内存
+                    if (hMem == NULL)
+                    {
+                        TRACE("内存不足了！");
+                        Sleep(1);
+                        continue;
+                    }
+                    IStream* pStream = NULL;
+                    HRESULT hr = CreateStreamOnHGlobal(hMem, TRUE, &pStream); // 创建内存流
+                    if (hr == S_OK) {
+                        ULONG length = 0;
+                        pStream->Write(pData, pClient->GetPacket().sData.size(), &length);
+                        LARGE_INTEGER bg = { 0 };
+                        pStream->Seek(bg, STREAM_SEEK_SET, NULL);
+                        m_image.Load(pStream);
+                        m_isFull = true;
+                    }
                 }
             }
         }
@@ -530,4 +547,12 @@ LRESULT CRemoteClientDlg::onSendPacket(WPARAM wParam, LPARAM lParam)
     CString strFile = (LPCTSTR)lParam;
     int ret = SendCommandPacket(wParam >> 1, wParam & 1, (BYTE*)(LPCSTR)strFile, strFile.GetLength());
     return ret;
+}
+
+
+void CRemoteClientDlg::OnBnClickedBtnStartWatch()
+{
+    _beginthread(threadEntryForWatchData, 0, this);
+    CWatchDialog dlg(this);
+    dlg.DoModal();
 }
