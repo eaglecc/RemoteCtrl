@@ -272,8 +272,8 @@ int SendScreen() {
     CImage screen;
     screen.Create(nWidth, nHeight, nBitPerPixel);
 
-    BitBlt(screen.GetDC(), 0, 0, 1920, 1020, hScreen, 0, 0, SRCCOPY);//将hScreen图像复制到screen图像中
-    //BitBlt(screen.GetDC(), 0, 0, nWidth, nHeight, hScreen, 0, 0, SRCCOPY);//将hScreen图像复制到screen图像中
+    //BitBlt(screen.GetDC(), 0, 0, 1920, 1020, hScreen, 0, 0, SRCCOPY);//将hScreen图像复制到screen图像中
+    BitBlt(screen.GetDC(), 0, 0, nWidth, nHeight, hScreen, 0, 0, SRCCOPY);//将hScreen图像复制到screen图像中
 
     //删除屏幕截图
     ReleaseDC(NULL, hScreen);
@@ -284,8 +284,8 @@ int SendScreen() {
     HRESULT ret = CreateStreamOnHGlobal(hMem, TRUE, &pStream);//基于内存块创建一个内存流，pStream指向流对象
     if (ret == S_OK)
     {
-        screen.Save(pStream, Gdiplus::ImageFormatPNG);//将图片保存到内存流中
-        //    screen.Save(pStream, Gdiplus::ImageFormatJPEG); // 保存图像到内存流
+        //screen.Save(pStream, Gdiplus::ImageFormatPNG);// 将图片保存到内存流中 PNG
+        screen.Save(pStream, Gdiplus::ImageFormatJPEG); // 保存图像到内存流 JPEG
         LARGE_INTEGER bg = { 0 };
         pStream->Seek(bg, STREAM_SEEK_SET, NULL);//将流指针移到流的起始位置
         PBYTE pData = (PBYTE)GlobalLock(hMem);//锁定内存块，转化为字节型指针，获取内存块的起始地址
@@ -294,7 +294,6 @@ int SendScreen() {
         CServerSocket::getInstance()->Send(pack);
         GlobalUnlock(hMem);//内存块解锁
     }
-
     pStream->Release();//释放流
     GlobalFree(hMem);//释放内存块
     screen.ReleaseDC();

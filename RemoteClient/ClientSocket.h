@@ -154,7 +154,7 @@ typedef struct MouseEvent {
         ptXY.y = 0;
     };
     WORD nAction; // µã»÷¡¢ÒÆ¶¯¡¢Ë«»÷
-    WORD nButton; // ×ó¼ü¡¢ÓÒ¼ü¡¢ÖÐ¼ü
+    WORD nButton; // ×ó¼ü¡¢ÖÐ¼ü¡¢ÓÒ¼ü
     POINT ptXY; // ×ø±ê
 }MOUSEEV, * PMOUSEEV;
 
