@@ -210,7 +210,7 @@ public:
         return true;
     }
 
-#define BUFFER_SIZE 819200
+#define BUFFER_SIZE 2048000
     // ´¦Àí¿ØÖÆ¶ËÃüÁî
     int DealCommand() {
         if (m_sock == -1) return -1;

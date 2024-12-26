@@ -184,7 +184,7 @@ int MouseEvent() {
         default:
             break;
         }
-
+        TRACE("[服务端] [MouseEvent] [nFlags: %d] [nAction: %d] [nButton: %d] [ptXY.x: %d] [ptXY.y: %d]\r\n", nFlags, mouse.nAction, mouse.nButton, mouse.ptXY.x, mouse.ptXY.y);
         if (nFlags != 8) SetCursorPos(mouse.ptXY.x, mouse.ptXY.y);
 
         switch (mouse.nAction) {
