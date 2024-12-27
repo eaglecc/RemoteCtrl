@@ -268,7 +268,7 @@ void CRemoteClientDlg::threadWathData()
     do {
         pClient = CClientSocket::getInstance();
     } while (pClient == NULL);
-    for (;;) { // 循环接收数据
+    while (!m_isClosed) { // 解决第二次打开远控时崩溃问题
         if (m_isFull == false) {
             int ret = SendMessageA(WM_SEND_PACKET, 6 << 1 | 1);
             if (ret == 6) {
@@ -287,6 +287,7 @@ void CRemoteClientDlg::threadWathData()
                     pStream->Write(pData, pClient->GetPacket().sData.size(), &length);
                     LARGE_INTEGER bg = { 0 };
                     pStream->Seek(bg, STREAM_SEEK_SET, NULL);
+                    if ((HBITMAP)m_image != NULL) m_image.Destroy(); 
                     m_image.Load(pStream);
                     m_isFull = true;
                 }
@@ -576,7 +577,10 @@ LRESULT CRemoteClientDlg::onSendPacket(WPARAM wParam, LPARAM lParam)
 
 void CRemoteClientDlg::OnBnClickedBtnStartWatch()
 {
+    m_isClosed = false;
     CWatchDialog dlg(this);
-    _beginthread(CRemoteClientDlg::threadEntryForWatchData, 0, this);
+    HANDLE hTrhead = (HANDLE)_beginthread(CRemoteClientDlg::threadEntryForWatchData, 0, this);
     dlg.DoModal();
+    m_isClosed = true;
+    WaitForSingleObject(hTrhead, 500);
 }
