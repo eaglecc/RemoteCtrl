@@ -2,8 +2,6 @@
 #include "framework.h"
 #include "pch.h"
 
-void Dump(BYTE* pData, size_t nSize);
-
 #pragma pack(push)
 #pragma pack(1)
 //°üÀà
