@@ -160,26 +160,6 @@ protected:
         return (len > 0);
     }
 
-    // 获取文件路径
-    bool GetFilePath(std::string& filePath) {
-        if (m_packet.sCmd == 2 || m_packet.sCmd == 3 || m_packet.sCmd == 4 || m_packet.sCmd == 9) {
-            filePath = m_packet.sData;
-            return true;
-        }
-        return false;
-    }
-    // 获取鼠标事件
-    bool GetMouseEvent(MOUSEEV& mouseEvent) {
-        if (m_packet.sCmd == 5) {
-            memcpy(&mouseEvent, m_packet.sData.c_str(), sizeof(MOUSEEV));
-            return true;
-        }
-    }
-
-    CPacket& GetPacket() {
-        return m_packet;
-    }
-
     // 关闭客户端连接
     void CloseClient() {
         if (m_cli_sock != INVALID_SOCKET)
