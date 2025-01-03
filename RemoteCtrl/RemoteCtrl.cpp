@@ -42,38 +42,20 @@ int main()
             CCommand command;
             // 1. 初始化网络
             CServerSocket* pserver = CServerSocket::getInstance();
-            if (pserver->InitServer() == false) {
+            int ret = pserver->Run(&CCommand::RunCommand, &command);
+            switch (ret)
+            {
+            case -1:
                 MessageBox(NULL, L"网络初始化失败", L"错误", MB_OK | MB_ICONERROR);
                 exit(0);
+                break;
+            case -2:
+                MessageBox(NULL, L"无法接受客户端连接，自动重试", L"错误", MB_OK | MB_ICONERROR);
+                exit(0);
+                break;
+            default:
+                break;
             }
-            int count = 0;
-            while (pserver != nullptr) {
-                // 2. 等待客户端连接
-                if (pserver->AcceptClient() == false) {
-                    TRACE("接受客户端连接失败，错误码：%d\n", WSAGetLastError());
-                    if (count > 3) {
-                        MessageBox(NULL, L"自动重试超过3次，程序结束！", L"错误", MB_OK | MB_ICONERROR);
-                        exit(0);
-                    }
-                    MessageBox(NULL, L"无法接受客户端连接，自动重试", L"错误", MB_OK | MB_ICONERROR);
-                    count++;
-                    Sleep(1000);
-                    continue;
-                }
-                TRACE("[服务端] [main] 客户端连接成功\r\n");
-                // 3. 处理客户端命令
-                int ret = pserver->DealCommand();
-                TRACE("[服务端] 服务器处理命令：%d\r\n", ret);
-                if (ret > 0)
-                {
-                    ret = command.ExcuteCommand(ret);
-                    if (ret != 0) {
-                        TRACE("[服务端] 命令执行失败：%d\r\n", ret);
-                    }
-                    pserver->CloseClient();
-                }
-            }
-            // TODO: 4. 释放网络资源
         }
     }
     else
